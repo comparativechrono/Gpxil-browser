@@ -1,0 +1,9 @@
+site/data/
+.cache/
+__pycache__/
+*.pyc
+node_modules/
+tests/output/
+.DS_Store
+tests/.fixture/
+.pytest_cache/

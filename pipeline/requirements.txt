@@ -1,0 +1,6 @@
+# What the data pipeline needs:  pip install -r pipeline/requirements.txt
+# gpxiltools follows the main branch of Gpxil-tools; the manifest records the
+# version that wrote the data.
+gpxiltools @ git+https://github.com/comparativechrono/Gpxil-tools@main
+numpy>=1.24
+tifffile>=2023.7.10

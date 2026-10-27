@@ -1,0 +1,3 @@
+# What the tests need, on top of pipeline/requirements.txt.
+# (tests/smoke.py and tests/scenarios.py also need playwright and the full data.)
+pytest>=8

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Gpxil Browser</title>
+    <meta name="description" content="Explore the human genome (GRCh38) as pixels: one pixel per base. Search genes, walk along chromosomes and enter the pixelverse." />
+    <meta name="theme-color" content="#07070f" />
+    <meta property="og:title" content="Gpxil Browser: enter the pixelverse" />
+    <meta property="og:description" content="The human reference genome, one pixel per base." />
+    <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <noscript><p class="noscript">The Gpxil browser draws the genome with JavaScript; please enable it.</p></noscript>
+
+    <div id="landing" hidden>
+      <canvas aria-hidden="true"></canvas>
+      <h1 class="sr-only">Enter the pixelverse</h1>
+      <div class="landing-ui">
+        <p class="tagline" data-text="The human genome, one pixel per base."></p>
+        <button id="enter" class="press-start">▶ ENTER</button>
+        <label class="skip"><input type="checkbox" id="skip-intro" /> skip the intro next time</label>
+      </div>
+    </div>
+
+    <div id="app" hidden>
+      <header class="top">
+        <a class="logo" href="#genome" title="All chromosomes (K)"><span class="logo-px">GPXIL</span><span class="logo-sub">browser</span></a>
+        <nav class="crumbs" aria-label="Where you are">
+          <button id="to-genome" class="chip" title="All chromosomes (K)">Karyotype</button>
+          <select id="contig-select" aria-label="Chromosome"></select>
+        </nav>
+        <div class="search">
+          <input id="search" type="search" placeholder="CFTR · chr17:43.04M-43.13M · 7q31 · rs7412" autocomplete="off" spellcheck="false" aria-label="Search genes, places and variants" aria-autocomplete="list" aria-controls="suggest" aria-expanded="false" />
+          <ul id="suggest" role="listbox" hidden></ul>
+        </div>
+        <div class="tools">
+          <button id="zoom-out" class="icon" title="Zoom out (−)" aria-label="Zoom out">−</button>
+          <button id="zoom-in" class="icon" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button id="random" class="icon" title="Surprise me: a random gene (R)" aria-label="Random gene">
+            <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M1 0h7v1h1v7H8v1H1V8H0V1h1zM2 2v1h1V2zm4 0v1h1V2zM4 4v1h1V4zM2 6v1h1V6zm4 0v1h1V6z" /></svg>
+          </button>
+          <button id="snap" class="icon" title="Save a picture of the view (P)" aria-label="Save picture">
+            <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M3 1h3v1h2v6H1V2h2zm1 2v1H3v2h1v1h1V6h1V4H5V3z" /></svg>
+          </button>
+          <button id="panel-toggle" class="icon" title="Show or hide the side panel" aria-label="Panel" aria-controls="panel">☰</button>
+          <button id="help-btn" class="icon" title="Help and shortcuts (?)" aria-label="Help">?</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="genome-view" class="screen" aria-label="Karyotype">
+          <div class="screen-head">
+            <h2>Human genome <small>GRCh38 · 3.1 billion bases · <span id="gene-count"></span></small></h2>
+            <p class="legend">Each chromosome is a column of pixels, one per 131,072 bases, in the colours of the palette (pale = repeats, grey = unknown N). Bands on the left, protein-coding genes on the right. <b>Click anywhere to dive in.</b></p>
+          </div>
+          <div class="karyo-wrap"><canvas id="karyo" aria-label="Chromosomes"></canvas></div>
+        </section>
+
+        <section id="chrom-view" class="screen" aria-label="Chromosome" hidden>
+          <div class="ideo-wrap"><canvas id="ideogram" aria-label="Chromosome overview: click to move"></canvas></div>
+          <div class="viewer">
+            <canvas id="gutter" aria-hidden="true"></canvas>
+            <div class="canvas-wrap"><canvas id="view" tabindex="0" aria-label="Genome pixels: arrow keys scroll, plus and minus zoom"></canvas></div>
+          </div>
+        </section>
+      </main>
+
+      <aside id="panel" aria-label="Details">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="here" class="on" aria-selected="true">Here</button>
+          <button role="tab" data-tab="gene" aria-selected="false">Gene</button>
+          <button role="tab" data-tab="view" aria-selected="false">View</button>
+          <button role="tab" data-tab="saved" aria-selected="false">Saved</button>
+        </div>
+        <div class="tab" role="tabpanel" data-tab="here">
+          <div id="here"><p class="empty">Point at a pixel to see the base, its position and the genes there. <b>Shift-drag</b> to select a stretch of sequence.</p></div>
+          <div id="selection"></div>
+        </div>
+        <div class="tab" role="tabpanel" data-tab="gene" hidden><div id="gene-panel"></div></div>
+        <div class="tab" role="tabpanel" data-tab="view" hidden>
+          <h3>Palette</h3>
+          <div id="palettes" class="palettes"></div>
+          <h3>Overlays</h3>
+          <label><input type="checkbox" data-opt="genesTrack" checked /> gene outlines and names</label>
+          <label><input type="checkbox" data-opt="exons" checked /> canonical exons</label>
+          <label><input type="checkbox" data-opt="cpg" /> CpG sites (zoomed in)</label>
+          <label><input type="checkbox" data-opt="letters" checked /> base letters (zoomed in)</label>
+          <label><input type="checkbox" data-opt="grid" checked /> pixel grid (zoomed in)</label>
+          <label><input type="checkbox" data-opt="contrast" checked /> stretch colours when zoomed out</label>
+          <h3>Live from Ensembl</h3>
+          <label><input type="checkbox" data-live="variation" /> known variants <small>(dbSNP; red = clinically significant; zoom to 30 kb)</small></label>
+          <label><input type="checkbox" data-live="regulatory" /> regulatory build <small>(<span style="color:#ff3ea5">promoters</span>, <span style="color:#ffe14d">enhancers</span>, <span style="color:#20e3ff">CTCF</span>, <span style="color:#a0ffa0">open chromatin</span>; zoom to 3 Mb)</small></label>
+          <h3>Repeats <small>(soft-masked, lower case)</small></h3>
+          <div class="seg" id="repeats">
+            <button data-v="fade" class="on">fade</button><button data-v="off">plain</button><button data-v="hide">hide</button>
+          </div>
+          <h3>Wrap</h3>
+          <div class="seg" id="wrap">
+            <button data-v="auto" class="on">fit screen</button><button data-v="fixed">fixed width</button>
+          </div>
+          <label class="wrap-width">bases per row <input id="wrap-width" type="number" min="1" max="16384" value="171" /></label>
+          <p class="hint">Fixed widths line tandem repeats up as stripes. Try 171 on a centromere (alpha satellite), 60 for FASTA lines, or 8,192, the width stored in the gpxil files.</p>
+          <div class="presets"><button data-w="60">60</button><button data-w="171">171</button><button data-w="1000">1,000</button><button data-w="8192">8,192</button></div>
+          <button id="find-period" class="wide">⌁ Find the repeat period here</button>
+          <h3>Gutter tracks</h3>
+          <p class="hint">Next to the row numbers: <span style="color:#ff8a3a">GC content</span> of each row (blue = AT-rich, orange = GC-rich), then genes (<span style="color:#7a6ac8">gene</span>, <span style="color:#ffe14d">exon</span>), then, with live data on, regulatory elements and <span style="color:#ff2a2a">clinically significant variants</span>.</p>
+        </div>
+        <div class="tab" role="tabpanel" data-tab="saved" hidden>
+          <button id="bookmark" class="wide">★ Save this place</button>
+          <ul id="bookmarks"></ul>
+          <p class="hint">Saved places stay in this browser. Every view also has its own link: copy the address bar to share it.</p>
+        </div>
+      </aside>
+
+      <footer class="status">
+        <span id="st-pos"></span>
+        <span id="st-win"></span>
+        <span id="st-zoom"></span>
+        <span class="credit">GRCh38 · <a href="#" id="about-link">data &amp; about</a></span>
+      </footer>
+
+      <div id="loader" hidden role="status"><canvas aria-hidden="true"></canvas><span class="loader-line"><span class="loader-text">LOADING DNA</span><span class="loader-dots" aria-hidden="true"></span></span><span class="loader-what"></span></div>
+      <div id="tooltip" hidden></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <dialog id="help">
+      <form method="dialog"><button class="icon close" aria-label="Close">✕</button></form>
+      <h2>How to fly the pixelverse</h2>
+      <p>Every pixel is one base of the human reference genome (GRCh38): <span class="sw a">A</span> <span class="sw c">C</span> <span class="sw g">G</span> <span class="sw t">T</span>, pale where the base is in a repeat, grey for unknown (N). Zoomed out, a pixel is the average colour of the bases it covers. Rows wrap like lines of text.</p>
+      <table class="keys">
+        <tr><td>scroll / drag</td><td>move along the chromosome</td></tr>
+        <tr><td>ctrl + scroll, pinch, + −</td><td>zoom</td></tr>
+        <tr><td>double-click</td><td>zoom in there (shift: out)</td></tr>
+        <tr><td>shift + drag</td><td>select bases</td></tr>
+        <tr><td>click a gene</td><td>highlight it</td></tr>
+        <tr><td>/ or G</td><td>search</td></tr>
+        <tr><td>K</td><td>karyotype</td></tr>
+        <tr><td>R</td><td>random gene</td></tr>
+        <tr><td>1 2 3</td><td>gene, transcript, expanded</td></tr>
+        <tr><td>[ ]</td><td>previous / next gene</td></tr>
+        <tr><td>P</td><td>save a picture</td></tr>
+        <tr><td>Esc</td><td>clear</td></tr>
+      </table>
+      <p>Search for genes (symbols, old names, Ensembl IDs), places (<code>chr7:117,480,025-117,668,665</code>, <code>X:73.8M</code>), bands (<code>17q21.31</code>) or variants (<code>rs334</code>).</p>
+      <h3>What you are looking at</h3>
+      <p>This is a browser for <a href="https://github.com/comparativechrono/Gpxil" target="_blank" rel="noopener">gpxil</a>, a file format that stores genomes as images, after Guenter Albrecht-Buehler's genome pixel images (<a href="https://doi.org/10.1371/journal.pone.0004701" target="_blank" rel="noopener">PLoS ONE, 2009</a>). The bases come straight from the GRCh38 gpxil files: the browser reads just the strips of pixels it needs with HTTP range requests.</p>
+      <p>Only when you ask for them, a few things come live from other databases: transcripts beyond the canonical one, variants, regulatory elements and rsID lookups from the <a href="https://rest.ensembl.org" target="_blank" rel="noopener">Ensembl REST API</a>, and gene summaries from NCBI Gene via <a href="https://mygene.info" target="_blank" rel="noopener">MyGene.info</a>.</p>
+      <p id="data-sources"></p>
+    </dialog>
+  </body>
+</html>

@@ -1,0 +1,90 @@
+# Builds the GRCh38 data and deploys the browser to GitHub Pages.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+#
+# The data (about 900 MB, from Ensembl, HGNC and the Ensembl REST API) is built
+# once and kept in the Actions cache; it is rebuilt when anything in pipeline/
+# changes, when the cache has expired (7 days unused), or on a manual run with
+# "rebuild" ticked.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Rebuild the genome data even if a cached build exists
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Restore the genome data
+        id: data
+        uses: actions/cache/restore@v6
+        with:
+          path: _site/data/grch38
+          key: grch38-${{ hashFiles('pipeline/**') }}-${{ github.run_id }}
+          restore-keys: grch38-${{ hashFiles('pipeline/**') }}-
+
+      - name: Build the genome data
+        id: build
+        if: steps.data.outputs.cache-matched-key == '' || inputs.rebuild
+        run: |
+          rm -rf _site/data/grch38
+          pip install -r pipeline/requirements.txt
+          python -I pipeline/build.py --out _site/data/grch38 --cache "$RUNNER_TEMP/downloads"
+
+      - name: Save the genome data
+        if: steps.build.outcome == 'success'
+        uses: actions/cache/save@v6
+        with:
+          path: _site/data/grch38
+          key: grch38-${{ hashFiles('pipeline/**') }}-${{ github.run_id }}
+
+      - name: Add the site
+        run: |
+          cp -r site/. _site/
+          python3 -I - <<'PY'
+          import json, os
+          total = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk("_site") for f in fs)
+          m = json.load(open("_site/data/grch38/manifest.json"))
+          print(f"site: {total / 1e6:,.1f} MB; data: {len(m['sequence']['contigs'])} contigs, {m['genes']['count']:,} genes; {m['generator']}")
+          assert total < 1e9, "GitHub Pages sites must be under 1 GB"
+          PY
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

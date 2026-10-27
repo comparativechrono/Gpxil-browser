@@ -1,0 +1,38 @@
+# The pipeline and the browser's modules, tested on a small synthetic genome.
+
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install
+        run: pip install -r pipeline/requirements.txt -r tests/requirements.txt
+
+      - name: Pipeline (builds the toy genome's data)
+        run: python -m pytest -v tests/test_pipeline.py
+
+      - name: Browser modules
+        run: node --test tests/js/browser.test.mjs
+
+      - name: Syntax of every module
+        run: for f in site/js/*.js; do node --check "$f" || exit 1; done
