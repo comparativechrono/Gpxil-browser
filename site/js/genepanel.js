@@ -213,9 +213,9 @@ export class GenePanel extends Emitter {
     return `
       <h3>Download as pixels <small><a href="https://github.com/comparativechrono/pxil" target="_blank" rel="noopener">pxil files</a></small></h3>
       <div class="actions pxil">
-        ${tx ? `<button data-act="pxil-transcript" title="${escapeHtml(names.transcript)}">transcript.pxil</button>` : ""}
-        ${tx && tx.cds ? `<button data-act="pxil-protein" title="${escapeHtml(names.protein)}">protein.pxil</button>` : ""}
-        <button data-act="pxil-gene" title="${escapeHtml(names.gene)}">gene.pxil</button>
+        ${tx ? `<button data-act="pxil-transcript" title="${escapeHtml(names.transcript)}"><span>transcript</span><small>.pxil.png</small></button>` : ""}
+        ${tx && tx.cds ? `<button data-act="pxil-protein" title="${escapeHtml(names.protein)}"><span>protein</span><small>.pxil.png</small></button>` : ""}
+        <button data-act="pxil-gene" title="${escapeHtml(names.gene)}"><span>gene</span><small>.pxil.png</small></button>
       </div>
       <details class="pxil-many" ${this.manyOpen ? "open" : ""}>
         <summary>Several transcripts and proteins at once</summary>
@@ -225,7 +225,7 @@ export class GenePanel extends Emitter {
             <th><label><input type="checkbox" data-pick-all="protein"> protein</label></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <label class="pick-gene"><input type="checkbox" data-pick="gene" ${p.gene ? "checked" : ""}> and ${escapeHtml(g.name)}'s genomic sequence (gene.pxil)</label>
+        <label class="pick-gene"><input type="checkbox" data-pick="gene" ${p.gene ? "checked" : ""}> and ${escapeHtml(g.name)}'s genomic sequence (gene.pxil.png)</label>
         <button data-act="pxil-zip" class="wide">${this.zipLabel()}</button>
       </details>
       <p class="hint">The pictures above, one pixel per base or amino acid, as PNG images whose pixel values are the sequence: they open in image software and read back exactly. File names carry the Ensembl IDs.</p>`;
@@ -253,9 +253,9 @@ export class GenePanel extends Emitter {
   fileNames(t) {
     const g = this.gene;
     return {
-      gene: `${safeName(g.name)}_${g.id}.gene.pxil`,
-      transcript: t ? `${safeName(t.name)}_${t.id}.transcript.pxil` : "",
-      protein: t ? `${safeName(t.name)}_${t.protein || `${t.id}_protein`}.protein.pxil` : "",
+      gene: `${safeName(g.name)}_${g.id}.gene.pxil.png`,
+      transcript: t ? `${safeName(t.name)}_${t.id}.transcript.pxil.png` : "",
+      protein: t ? `${safeName(t.name)}_${t.protein || `${t.id}_protein`}.protein.pxil.png` : "",
     };
   }
 

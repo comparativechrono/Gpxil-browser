@@ -436,8 +436,8 @@ test("pxil files are PNGs whose pixels read back as the sequence", async () => {
   const dna = "ACGTacgtNNRYacgtTTGA".repeat(13) + "AC";
   const protein = "MEEPQSDPSVUEPPLSQ*";
   const files = [
-    { name: "x.gene.pxil", seq: dna, alphabet: DNA, width: 30, kind: "gene" },
-    { name: "x.protein.pxil", seq: protein, alphabet: PROTEIN, width: 7, kind: "protein" },
+    { name: "x.gene.pxil.png", seq: dna, alphabet: DNA, width: 30, kind: "gene" },
+    { name: "x.protein.pxil.png", seq: protein, alphabet: PROTEIN, width: 7, kind: "protein" },
   ];
   for (const f of files) {
     const colours = [...f.alphabet].map((_, i) => [i * 8, 255 - i * 8, 100]);
@@ -472,7 +472,7 @@ print(json.dumps(out))
     assert.equal(g.meta.kind, f.kind);
     assert.equal(g.meta.length, f.seq.length);
   }
-  assert.deepEqual(r.zip, { names: ["x.gene.pxil", "x.protein.pxil"], bad: null, same: true });
+  assert.deepEqual(r.zip, { names: ["x.gene.pxil.png", "x.protein.pxil.png"], bad: null, same: true });
   assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926); // the standard check value
   assert.equal(safeName("TP53-201 / α"), "TP53-201_");
   assert.throws(() => indicesOf("ACGX", DNA));

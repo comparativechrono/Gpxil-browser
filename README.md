@@ -70,14 +70,15 @@ It is a static site for GitHub Pages: **https://comparativechrono.github.io/Gpxi
 **Take the pixels home**
 
 - **pxil files** of the gene, the transcript and the protein you are looking
-  at (`gene.pxil`, `transcript.pxil`, `protein.pxil`), or of any number of the
-  gene's transcripts and proteins at once, zipped. Every file name carries the
-  Ensembl ID (ENSG, ENST or ENSP), for example
-  `TP53-201_ENSP00000269305.protein.pxil`. [pxil](https://github.com/comparativechrono/pxil)
-  is a simple format for single sequences: a PNG image, one pixel per base or
-  amino acid, whose pixel values are the sequence, so it opens in image
-  software and reads back exactly. It is meant for quick analysis and sharing,
-  not for keeping genomes.
+  at (`.gene.pxil.png`, `.transcript.pxil.png`, `.protein.pxil.png`), or of
+  any number of the gene's transcripts and proteins at once, zipped. Every
+  file name carries the Ensembl ID (ENSG, ENST or ENSP), for example
+  `TP53-201_ENSP00000269305.protein.pxil.png`.
+  [pxil](https://github.com/comparativechrono/pxil) is a simple format for
+  single sequences: a PNG image, one pixel per base or amino acid, whose pixel
+  values are the sequence, so it opens in any image viewer and reads back
+  exactly. It is meant for quick analysis and sharing, not for keeping
+  genomes.
 - **The genome as gpxil**: every chromosome's gpxil file (the files the browser
   reads), and the whole of GRCh38 in one file, `GRCh38.gpxil.tif`, published as
   a [release](https://github.com/comparativechrono/Gpxil-browser/releases)

@@ -264,10 +264,10 @@ def main() -> int:
             meta = json.loads(im.info["pxil"])
             got[d.value.suggested_filename] = "".join(meta["alphabet"][i] for i in im.tobytes()[: meta["length"]])
         names = sorted(got)
-        prot = got.get("TP53-201_ENSP00000269305.protein.pxil", "")
+        prot = got.get("TP53-201_ENSP00000269305.protein.pxil.png", "")
         check(
             "pxil downloads: Ensembl IDs in the names, sequences inside",
-            names == ["TP53-201_ENSP00000269305.protein.pxil", "TP53-201_ENST00000269305.transcript.pxil", "TP53_ENSG00000141510.gene.pxil"] and prot.startswith("MEEPQSDPSV") and len(prot) == 394,
+            names == ["TP53-201_ENSP00000269305.protein.pxil.png", "TP53-201_ENST00000269305.transcript.pxil.png", "TP53_ENSG00000141510.gene.pxil.png"] and prot.startswith("MEEPQSDPSV") and len(prot) == 394,
             f"{names}; protein {len(prot)} aa",
         )
         page.click("details.pxil-many summary")
