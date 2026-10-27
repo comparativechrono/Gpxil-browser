@@ -911,6 +911,30 @@ details.pxil-many summary {
 }
 
 /* ------------------------------------------------------------ downloads, copyright */
+.cli-label {
+  margin-bottom: 4px;
+}
+.cli {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.cli pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 2px solid var(--line2);
+  color: var(--green);
+  font: 18px/1.25 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.cli button {
+  flex: none;
+}
 .dl-files {
   columns: 3 9em;
   column-gap: 18px;

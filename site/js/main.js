@@ -502,6 +502,18 @@ class App {
     $("#snap").addEventListener("click", () => this.snapshot());
     $("#help-btn").addEventListener("click", () => $("#help").showModal());
     $("#downloads-btn").addEventListener("click", () => this.showDownloads());
+    $("#downloads").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-copy]");
+      if (!b) return;
+      const text = $(`#${b.dataset.copy}`).textContent.trim();
+      try {
+        await navigator.clipboard.writeText(text);
+        this.toast("Copied the command");
+      } catch {
+        getSelection().selectAllChildren($(`#${b.dataset.copy}`));
+        this.toast("Press Ctrl+C (⌘C) to copy");
+      }
+    });
     $("#downloads-link").addEventListener("click", (e) => {
       e.preventDefault();
       this.showDownloads();

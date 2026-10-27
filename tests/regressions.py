@@ -297,6 +297,9 @@ def main() -> int:
         page.wait_for_timeout(300)
         files = page.evaluate("[...document.querySelectorAll('#dl-files a')].map(a => a.getAttribute('href'))")
         check("downloads list every gpxil file", len(files) == 26 and all(f.endswith(".gpxil.tif") for f in files), f"{len(files)} files")
+        cli = page.evaluate("document.querySelector('#dl-cli').textContent.trim()")
+        href = page.evaluate("document.querySelector('#dl-whole').href")
+        check("the command line downloads the genome", cli == f"curl -LO {href}", cli)
         ctx.close()
 
         # selenocysteine: GPX1's Sec49 is U, not a stop
