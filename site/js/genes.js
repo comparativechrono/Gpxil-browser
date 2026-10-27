@@ -1,16 +1,21 @@
-// Genes: a static index built from Ensembl's gene set (canonical transcripts,
-// HGNC names and aliases), plus live lookups in the Ensembl REST API for
-// every other transcript, transcript IDs, symbols the index doesn't know and
-// variant IDs.
+// Genes: a static index built from Ensembl's gene set (every transcript, HGNC
+// names and aliases), plus live lookups in the Ensembl REST API for transcript
+// IDs and symbols the index doesn't know, and for variant IDs.
 
-import { Emitter, fetchJson, fetchJsonGz, upperBound } from "./util.js";
+import { Emitter, fetchJson, fetchJsonGz, fetchRange, gunzip, upperBound } from "./util.js";
 
 export const REST = "https://rest.ensembl.org";
 const REST_HEADERS = { headers: { Accept: "application/json" } };
 
+// transcript flags in the transcripts files (pipeline/genes.py)
+const CANONICAL = 1;
+const MANE_SELECT = 2;
+const MANE_CLINICAL = 4;
+const BASIC = 8;
+
 function normaliseGene(row, contig) {
-  const [id, name, start, end, strand, biotype, description, tx, xref] = row;
-  const g = { id, name, contig, start, end, strand, biotype, description: description || "", xref: null, tx: null };
+  const [id, name, start, end, strand, biotype, description, tx, xref, where] = row;
+  const g = { id, name, contig, start, end, strand, biotype, description: description || "", xref: null, tx: null, txIndex: where || null, txCount: where ? where[2] : tx ? 1 : 0 };
   if (xref) g.xref = { hgnc: xref[0], entrez: xref[1], uniprot: xref[2], omim: xref[3] };
   if (tx) {
     const [tid, tname, tbio, mane, ts, te, flat, cds, incomplete, sec] = tx;
@@ -35,12 +40,38 @@ function normaliseGene(row, contig) {
   return g;
 }
 
+/** One transcript from a transcripts file (coordinates relative to the gene's start). */
+function normaliseTranscript(row, gene) {
+  const [id, name, biotype, flags, s, e, flat, cds, incomplete, sec] = row;
+  const g0 = gene.start;
+  const exons = [];
+  for (let i = 0; i < flat.length; i += 2) exons.push([g0 + flat[i], g0 + flat[i + 1]]);
+  return {
+    id,
+    name,
+    biotype,
+    canonical: !!(flags & CANONICAL),
+    mane: !!(flags & MANE_SELECT),
+    maneClinical: !!(flags & MANE_CLINICAL),
+    basic: !!(flags & BASIC),
+    start: g0 + s,
+    end: g0 + e,
+    strand: gene.strand,
+    exons,
+    cds: cds ? [g0 + cds[0], g0 + cds[1]] : null,
+    frame: cds ? cds[2] : 0,
+    incomplete: incomplete || "",
+    sec: (sec || []).map((p) => g0 + p),
+  };
+}
+
 export class GeneDB extends Emitter {
   constructor(manifest, base) {
     super();
     this.base = base;
     this.manifest = manifest;
     this.contigFiles = new Map(manifest.sequence.contigs.filter((c) => c.genes).map((c) => [c.name, c.genes]));
+    this.txFiles = new Map(manifest.sequence.contigs.filter((c) => c.transcripts).map((c) => [c.name, c.transcripts]));
     this.byContig = new Map(); // contig -> {genes, starts, maxEnd}
     this.loading = new Map();
     this.indexPromise = null;
@@ -198,11 +229,28 @@ export class GeneDB extends Emitter {
     return null;
   }
 
-  // ---------------------------------------------------------------- live data
-  /** All transcripts of a gene from the Ensembl REST API, as plain intervals. */
-  async transcripts(gene) {
+  // ---------------------------------------------------------------- transcripts
+  /** All transcripts of a gene, canonical first: from the site's own data, or failing that from Ensembl. */
+  transcripts(gene) {
     if (this.txCache.has(gene.id)) return this.txCache.get(gene.id);
-    const p = fetchJson(`${REST}/lookup/id/${gene.id}?expand=1;utr=1;content-type=application/json`, "Ensembl transcripts", REST_HEADERS).then((d) => {
+    const p = gene.txIndex && this.txFiles.has(gene.contig) ? this.storedTranscripts(gene) : this.ensemblTranscripts(gene);
+    this.txCache.set(gene.id, p);
+    p.catch(() => this.txCache.delete(gene.id));
+    return p;
+  }
+
+  /** One range request into the contig's transcripts file: the gene's own gzip member. */
+  async storedTranscripts(gene) {
+    const [offset, length] = gene.txIndex;
+    const url = new URL(this.txFiles.get(gene.contig), this.base).href;
+    const bytes = await fetchRange(url, offset, offset + length, "transcripts");
+    const rows = JSON.parse(new TextDecoder().decode(await gunzip(bytes)));
+    return { description: "", txs: rows.map((r) => normaliseTranscript(r, gene)) };
+  }
+
+  /** All transcripts of a gene from the Ensembl REST API (for data built without transcripts files). */
+  ensemblTranscripts(gene) {
+    return fetchJson(`${REST}/lookup/id/${gene.id}?expand=1;utr=1;content-type=application/json`, "Ensembl transcripts", REST_HEADERS).then((d) => {
       const txs = (d.Transcript || []).map((t) => {
         const exons = (t.Exon || []).map((e) => [e.start - 1, e.end]).sort((a, b) => a[0] - b[0]);
         const tr = t.Translation;
@@ -225,9 +273,6 @@ export class GeneDB extends Emitter {
       txs.sort((a, b) => b.canonical - a.canonical || (b.cds ? 1 : 0) - (a.cds ? 1 : 0) || a.name.localeCompare(b.name));
       return { description: d.description || "", txs };
     });
-    this.txCache.set(gene.id, p);
-    p.catch(() => this.txCache.delete(gene.id));
-    return p;
   }
 
   async variant(rsid) {

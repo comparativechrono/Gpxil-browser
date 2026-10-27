@@ -13,8 +13,8 @@ It is a static site for GitHub Pages: **https://comparativechrono.github.io/Gpxi
 
 | | |
 |---|---|
-| ![The karyotype: every chromosome as a column of pixels, with cytobands and gene density](docs/img/karyotype.png) | ![TP53 highlighted, with its Ensembl transcripts drawn as pixel tracks](docs/img/gene.png) |
-| The karyotype, one pixel per 131,072 bases | A gene, its transcripts and its exons |
+| ![The karyotype: every chromosome as a column of pixels, with cytobands and gene density](docs/img/karyotype.png) | ![Expanded mode: all 40 TP53 transcripts, one lane each, drawn with the gene's pixels](docs/img/gene.png) |
+| The karyotype, one pixel per 131,072 bases | Expanded: every transcript of TP53 on its own lane |
 | ![The chromosome 1 centromere wrapped at 340 bases per row, where the alpha-satellite repeat lines up into columns](docs/img/repeat.png) | |
 | Alpha satellite on chr1, wrapped at the repeat period the browser found (340 bp) | |
 
@@ -49,10 +49,18 @@ It is a static site for GitHub Pages: **https://comparativechrono.github.io/Gpxi
 **Genes**
 
 - The gene's pixels stay lit while the rest of the view dims.
-- Three modes (`1` `2` `3`): **gene**, **transcript** (introns dimmed, UTRs
-  lightly dimmed, exons boxed) and **expanded** (every transcript as a pixel
-  track). The canonical transcript (MANE Select where there is one) comes with
-  the site; all the others are fetched from Ensembl and can be picked from a list.
+- Three modes (`1` `2` `3`):
+  - **Gene**: the whole gene lit up in the genome.
+  - **Transcript**: one transcript lit up in the genome (exons bright, UTRs
+    half-lit, introns dimmed); pick any transcript from the list.
+  - **Expanded**: every transcript of the gene on its own lane, like the
+    expanded gene track of a classic browser but drawn with the gene's pixels:
+    coding exons fill the lane, UTRs and non-coding exons half of it, introns
+    are a thin line with arrows for the strand, and the top lane is the DNA.
+    Zoom and scroll the lanes; click one to open that transcript.
+
+  All 646,577 transcripts of Ensembl 116 are stored with the site, so these
+  modes need no outside call.
 - The spliced mRNA and the protein drawn as pixels (one pixel per amino acid,
   translated here, with the mitochondrial code on chrM and selenocysteine where
   Ensembl marks it); hover for codon and position.
@@ -87,6 +95,7 @@ The site has no build step: plain HTML, CSS and JavaScript modules in
 | `gpxil/chr*.gpxil.tif`, `gpxil/unplaced.gpxil.tif` | The reference as gpxil: one reference-only file per chromosome, 8,192 bases per row, Deflate, 256 KiB strips; the 169 unplaced and unlocalised scaffolds share one file | 849 MB |
 | `overview/*.ov.gz` | Summary bins for zoomed-out views: for bins of 128 to 131,072 bases, GC, N and soft-masked fractions | 39 MB |
 | `genes/*.json.gz` | 78,941 genes (Ensembl 116) with HGNC names, cross-references and canonical transcripts; a search index; 58,149 aliases | 8 MB |
+| `transcripts/*.bin` | All 646,577 transcripts, one gzip member per gene, so a gene's transcripts take one range request (the gene's row says where) | 21 MB |
 | `karyotype.json`, `cytobands.json.gz`, `manifest.json` | The karyotype bins, cytobands, and the index of everything | 0.1 MB |
 
 The browser never downloads a whole chromosome. Like a cloud-optimised
@@ -100,7 +109,7 @@ Some things are not stored on the site but fetched live, only when asked for:
 
 | From | What |
 |---|---|
-| [Ensembl REST API](https://rest.ensembl.org) | All transcripts of a gene, transcript IDs and other gene names, rsIDs, variants and regulatory elements in view |
+| [Ensembl REST API](https://rest.ensembl.org) | Transcript IDs and other gene names, rsIDs, variants and regulatory elements in view |
 | [MyGene.info](https://mygene.info) | Gene summaries from NCBI Gene |
 
 ## Building the data
@@ -135,7 +144,7 @@ cache has expired, or when the workflow is run by hand with *rebuild* ticked.
 One-time setup: in the repository's **Settings → Pages → Build and
 deployment**, set **Source** to **GitHub Actions**.
 
-The whole site is about 900 MB, inside GitHub Pages' 1 GB limit for a site.
+The whole site is about 920 MB, inside GitHub Pages' 1 GB limit for a site.
 
 ## Tests
 

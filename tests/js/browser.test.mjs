@@ -208,6 +208,26 @@ test("genes: overlap queries, lookups and search", async () => {
   assert.equal(viaAlias.via, "PIX1");
   assert.equal((await db.resolve("OLDPIX")).row[0], "PIXL1");
 
+  // every transcript comes from the site's own data, with one range request
+  const before = requests;
+  const t1 = await db.transcripts(p1);
+  assert.equal(requests, before + 1);
+  assert.deepEqual(
+    t1.txs.map((t) => [t.id, t.canonical, t.mane, !!t.cds]),
+    [
+      ["ENST00000000011", true, true, true],
+      ["ENST00000000012", false, false, false],
+    ]
+  );
+  assert.deepEqual(t1.txs[0].exons, p1.tx.exons);
+  assert.deepEqual(t1.txs[0].cds, p1.tx.cds);
+  assert.deepEqual(t1.txs[0].sec, p1.tx.sec);
+  assert.deepEqual(t1.txs[1].exons, [
+    [100_000, 100_100],
+    [110_000, 110_300],
+  ]);
+  assert.equal(p1.txCount, 2);
+
   const sug = await db.suggest("pix", 10);
   assert.deepEqual(
     sug.map((s) => s.name),

@@ -2,10 +2,11 @@
 #
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 #
-# The data (about 900 MB, from Ensembl, HGNC and the Ensembl REST API) is built
-# once and kept in the Actions cache; it is rebuilt when anything in pipeline/
-# changes, when the cache has expired (7 days unused), or on a manual run with
-# "rebuild" ticked.
+# Encoding the genome (gpxil files and summary bins, about 870 MB, from a 1 GB
+# download) takes about 25 minutes, so it is kept in the Actions cache and redone
+# only when the sequence code changes, when the cache has expired (7 days
+# unused), or on a manual run with "rebuild" ticked. Genes, transcripts and
+# cytobands are rebuilt on every run, which takes a couple of minutes.
 
 name: Pages
 
@@ -15,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       rebuild:
-        description: Rebuild the genome data even if a cached build exists
+        description: Encode the genome again even if a cached copy exists
         type: boolean
         default: false
 
@@ -39,28 +40,43 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore the genome data
-        id: data
+      - name: Install the pipeline
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Restore the encoded genome
+        id: seq
         uses: actions/cache/restore@v6
         with:
           path: _site/data/grch38
-          key: grch38-${{ hashFiles('pipeline/**') }}-${{ github.run_id }}
-          restore-keys: grch38-${{ hashFiles('pipeline/**') }}-
+          key: grch38-seq-${{ hashFiles('pipeline/sequence.py', 'pipeline/common.py', 'pipeline/requirements.txt') }}-${{ github.run_id }}
+          restore-keys: grch38-seq-${{ hashFiles('pipeline/sequence.py', 'pipeline/common.py', 'pipeline/requirements.txt') }}-
 
-      - name: Build the genome data
-        id: build
-        if: steps.data.outputs.cache-matched-key == '' || inputs.rebuild
+      - name: Restore the annotation downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/downloads/*.gtf.gz
+            ${{ runner.temp }}/downloads/*.txt
+            ${{ runner.temp }}/downloads/*.json
+          key: annotation-${{ hashFiles('pipeline/build.py') }}
+
+      - name: Encode the genome, and build everything else
+        id: encode
+        if: steps.seq.outputs.cache-matched-key == '' || inputs.rebuild
         run: |
           rm -rf _site/data/grch38
-          pip install -r pipeline/requirements.txt
           python -I pipeline/build.py --out _site/data/grch38 --cache "$RUNNER_TEMP/downloads"
 
-      - name: Save the genome data
-        if: steps.build.outcome == 'success'
+      - name: Save the encoded genome
+        if: steps.encode.outcome == 'success'
         uses: actions/cache/save@v6
         with:
           path: _site/data/grch38
-          key: grch38-${{ hashFiles('pipeline/**') }}-${{ github.run_id }}
+          key: grch38-seq-${{ hashFiles('pipeline/sequence.py', 'pipeline/common.py', 'pipeline/requirements.txt') }}-${{ github.run_id }}
+
+      - name: Build genes, transcripts and cytobands
+        if: steps.encode.outcome == 'skipped'
+        run: python -I pipeline/build.py --out _site/data/grch38 --cache "$RUNNER_TEMP/downloads" --skip-sequence
 
       - name: Add the site
         run: |
@@ -69,7 +85,7 @@ jobs:
           import json, os
           total = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk("_site") for f in fs)
           m = json.load(open("_site/data/grch38/manifest.json"))
-          print(f"site: {total / 1e6:,.1f} MB; data: {len(m['sequence']['contigs'])} contigs, {m['genes']['count']:,} genes; {m['generator']}")
+          print(f"site: {total / 1e6:,.1f} MB; data: {len(m['sequence']['contigs'])} contigs, {m['genes']['count']:,} genes, {m['genes'].get('transcripts', 0):,} transcripts; {m['generator']}")
           assert total < 1e9, "GitHub Pages sites must be under 1 GB"
           PY
 

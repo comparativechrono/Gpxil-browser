@@ -8,9 +8,9 @@ import { cdsRange, gcFraction, markSelenocysteine, spliced, translate, wrapFasta
 import { Emitter, escapeHtml, fmt, fmtBp } from "./util.js";
 
 const MODES = [
-  ["gene", "Gene"],
-  ["transcript", "Transcript"],
-  ["expanded", "Expanded"],
+  ["gene", "Gene", "The whole gene lit up in the genome."],
+  ["transcript", "Transcript", "One transcript lit up in the genome: exons bright, UTRs half-lit, introns dimmed. Pick another below."],
+  ["expanded", "Expanded", "Every transcript on its own lane in the viewer. Click a lane to open that transcript."],
 ];
 
 export class GenePanel extends Emitter {
@@ -56,7 +56,12 @@ export class GenePanel extends Emitter {
       this.tx = (this.txs || []).find((t) => t.id === transcript) || this.tx;
     }
     this.render();
-    if (mode !== "gene" && !this.txs) this.loadTranscripts().then(() => token === this.token && this.render());
+    if (!this.txs)
+      this.loadTranscripts().then(() => {
+        if (token !== this.token) return;
+        this.render();
+        this.changed();
+      });
     this.loadCodes()
       .then(() => token === this.token && this.renderPixels())
       .catch((e) => this.emit("warn", `Couldn't read ${gene.name}'s bases: ${e.message}`));
@@ -76,7 +81,7 @@ export class GenePanel extends Emitter {
   }
 
   changed() {
-    this.emit("change", { gene: this.gene, tx: this.tx, mode: this.mode });
+    this.emit("change", { gene: this.gene, tx: this.tx, mode: this.mode, txs: this.txs });
   }
 
   async loadTranscripts() {
@@ -115,7 +120,13 @@ export class GenePanel extends Emitter {
 
   setMode(m) {
     this.mode = m;
-    if (m !== "gene" && !this.txs) this.loadTranscripts().then(() => this.render());
+    const g = this.gene;
+    if (!this.txs)
+      this.loadTranscripts().then(() => {
+        if (this.gene !== g) return;
+        this.render();
+        this.changed();
+      });
     this.render();
     this.renderPixels();
     this.changed();
@@ -147,23 +158,24 @@ export class GenePanel extends Emitter {
       </div>
       <p class="desc">${escapeHtml(g.description || "")}</p>
       <p class="meta">${escapeHtml(g.biotype.replace(/_/g, " "))} · <a href="#" data-act="zoom">${g.contig}:${fmt(g.start + 1)}-${fmt(g.end)}</a> · ${fmtBp(g.end - g.start)}${band ? ` · ${g.contig.replace("chr", "")}${band[2]}` : ""}</p>
-      <div class="modes" role="tablist">${MODES.map(([k, l]) => `<button role="tab" data-mode="${k}" class="${this.mode === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="modes" role="tablist">${MODES.map(([k, l, about]) => `<button role="tab" data-mode="${k}" aria-selected="${this.mode === k}" title="${about}" class="${this.mode === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      <p class="hint mode-hint">${MODES.find(([k]) => k === this.mode)[2]}</p>
       ${
         txs.length
-          ? `<label class="txpick">Transcript <select data-role="tx">${txs
+          ? `<label class="txpick">Transcript${this.txs ? ` <small>${fmt(this.txs.length)} in all</small>` : ""} <select data-role="tx">${txs
               .map((t) => `<option value="${t.id}" ${tx && t.id === tx.id ? "selected" : ""}>${escapeHtml(t.name)} · ${t.id}${tag(t) ? ` · ${tag(t)}` : ""}</option>`)
               .join("")}</select></label>`
           : ""
       }
-      ${!this.txs && this.mode !== "gene" ? `<p class="hint">fetching all transcripts from Ensembl…</p>` : ""}
+      ${!this.txs && g.txCount > 1 ? `<p class="hint">loading all ${fmt(g.txCount)} transcripts…</p>` : ""}
       ${
         tx
           ? `<p class="meta">${escapeHtml(tx.biotype.replace(/_/g, " "))} · ${tx.exons.length} exons · ${fmt(exonLen)} nt${cdsLen ? ` · CDS ${fmt(cdsLen)} nt · ${fmt(cdsLen / 3 - 1)} aa` : ""}${tx.incomplete ? ` · ${escapeHtml(tx.incomplete)}` : ""}</p>`
           : ""
       }
       <div class="pixels">
-        ${this.mode === "expanded" ? `<h3>Transcripts as pixel tracks</h3><div class="tracks"></div>` : ""}
-        <h3>mRNA <small>exons spliced, 5′→3′</small></h3><canvas class="mrna"></canvas>
+        ${this.mode === "expanded" ? `<p class="hint">In the lanes, coding exons fill the lane, UTRs and non-coding exons half of it, and introns are a thin line with arrows for the strand; the top lane is the DNA. Hover for exon numbers. Zoom with + and −, or ctrl + scroll.</p>` : ""}
+        <h3>mRNA <small>${tx ? `${escapeHtml(tx.name)}, ` : ""}exons spliced, 5′→3′</small></h3><canvas class="mrna"></canvas>
         ${tx && tx.cds ? `<h3>Protein <small>one pixel per amino acid</small></h3><canvas class="protein"></canvas>` : ""}
         <p class="pixel-info" aria-live="polite"></p>
       </div>
@@ -183,8 +195,6 @@ export class GenePanel extends Emitter {
     const lut = buildLut(this.palette);
     const width = Math.max(160, Math.floor(this.root.getBoundingClientRect().width - 8));
     const info = this.root.querySelector(".pixel-info");
-    const tracks = this.root.querySelector(".tracks");
-    if (tracks) this.drawTracks(tracks, lut, width, info);
     const tx = this.tx;
     const mrna = this.root.querySelector("canvas.mrna");
     if (!tx || !mrna) return;
@@ -218,74 +228,10 @@ export class GenePanel extends Emitter {
     }
   }
 
-  drawTracks(el, lut, width, info) {
-    const g = this.gene;
-    const txs = this.txs || (g.tx ? [g.tx] : []);
-    const bpp = (g.end - g.start) / width;
-    const codes = this.codes.codes;
-    // colour of each column: the mean colour of its bases
-    const colCols = new Array(width);
-    for (let x = 0; x < width; x++) {
-      const a = Math.floor(x * bpp);
-      const b = Math.max(a + 1, Math.floor((x + 1) * bpp));
-      let R = 0;
-      let G = 0;
-      let B = 0;
-      for (let p = a; p < b; p++) {
-        const c = codes[p] * 3;
-        R += lut.rgb[c];
-        G += lut.rgb[c + 1];
-        B += lut.rgb[c + 2];
-      }
-      const m = b - a;
-      colCols[x] = [R / m, G / m, B / m];
-    }
-    el.innerHTML = txs
-      .map((t, i) => `<div class="track ${this.tx && t.id === this.tx.id ? "on" : ""}" data-tx="${t.id}"><span>${escapeHtml(t.name)} <small>${escapeHtml(t.biotype.replace(/_/g, " "))}${t.mane ? " · MANE" : t.canonical ? " · canonical" : ""}</small></span><canvas data-i="${i}"></canvas></div>`)
-      .join("");
-    el.querySelectorAll("canvas").forEach((cv) => {
-      const t = txs[+cv.dataset.i];
-      const h = 10;
-      cv.width = width;
-      cv.height = h;
-      cv.style.width = `${width}px`;
-      cv.style.height = `${h * 1.4}px`;
-      const ctx = cv.getContext("2d");
-      const img = ctx.createImageData(width, h);
-      for (let x = 0; x < width; x++) {
-        const p = g.start + Math.floor((x + 0.5) * bpp);
-        const inExon = t.exons.some(([a, b]) => p >= a && p < b) || t.exons.some(([a, b]) => a < g.start + (x + 1) * bpp && b > g.start + x * bpp);
-        const coding = t.cds && p >= t.cds[0] && p < t.cds[1];
-        const inTx = p >= t.start && p < t.end;
-        const [r, gg, b] = colCols[x];
-        for (let y = 0; y < h; y++) {
-          const o = 4 * (y * width + x);
-          let k = 0.1;
-          if (inExon) k = coding || !t.cds ? 1 : y >= 2 && y < h - 2 ? 0.75 : 0.15;
-          else if (inTx) k = y === h >> 1 ? 0.6 : 0.08;
-          img.data[o] = r * k + 7 * (1 - k);
-          img.data[o + 1] = gg * k + 7 * (1 - k);
-          img.data[o + 2] = b * k + 15 * (1 - k);
-          img.data[o + 3] = 255;
-        }
-      }
-      ctx.putImageData(img, 0, 0);
-      cv.onpointermove = (e) => {
-        const r = cv.getBoundingClientRect();
-        const f = (e.clientX - r.left - cv.clientLeft) / cv.clientWidth; // inside the border
-        const p = g.start + Math.min(g.end - g.start - 1, Math.max(0, Math.floor(f * (g.end - g.start))));
-        const ex = t.exons.findIndex(([a, b]) => p >= a && p < b);
-        const n = t.strand > 0 ? ex + 1 : t.exons.length - ex;
-        info.textContent = `${t.name} · ${g.contig}:${fmt(p + 1)} · ${ex >= 0 ? `exon ${n} of ${t.exons.length}` : p >= t.start && p < t.end ? "intron" : "outside"}`;
-      };
-    });
-  }
-
   async click(e) {
-    const b = e.target.closest("[data-act],[data-mode],.track");
+    const b = e.target.closest("[data-act],[data-mode]");
     if (!b) return;
     if (b.dataset.mode) return this.setMode(b.dataset.mode);
-    if (b.classList.contains("track")) return this.pickTx(b.dataset.tx);
     e.preventDefault();
     const g = this.gene;
     const act = b.dataset.act;

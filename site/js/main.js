@@ -12,6 +12,7 @@ import { GenePanel } from "./genepanel.js";
 import { Landing } from "./landing.js";
 import { DnaLoader } from "./loader.js";
 import { LIMITS, LiveTracks } from "./live.js";
+import { TranscriptLanes } from "./lanes.js";
 import { IUPAC, PALETTES, buildLut, hasPalette, inkOn } from "./palettes.js";
 import { gcFraction, lettersOf, wrapFasta } from "./seq.js";
 import { clamp, debounce, escapeHtml, fetchJson, fetchJsonGz, fmt, fmtBp, storageGet, storageSet } from "./util.js";
@@ -50,6 +51,7 @@ class App {
     this.panel = new GenePanel({ root: $("#gene-panel"), genome: this.genome, genes: this.genes, cytobands });
     this.live = new LiveTracks();
     this.view.live = this.live;
+    this.lanes = new TranscriptLanes({ canvas: $("#lanes"), genome: this.genome, lut: () => this.view.lut, gutterWidth: () => $("#gutter").getBoundingClientRect().width || 118 });
     this.highlight = null;
     this.screen = "genome";
     this.applying = false;
@@ -152,6 +154,7 @@ class App {
   // ------------------------------------------------------------------ screens
   showGenome(push = true) {
     this.screen = "genome";
+    this.syncLanes();
     $("#genome-view").hidden = false;
     $("#chrom-view").hidden = true;
     $("#contig-select").value = "";
@@ -169,6 +172,7 @@ class App {
     $("#chrom-view").hidden = false;
     this.view.resize();
     this.view.show(c.name, start, end, opts);
+    this.syncLanes();
     $("#contig-select").value = c.name;
     document.title = `${c.name} · Gpxil Browser`;
     if (push) this.pushState();
@@ -218,6 +222,24 @@ class App {
       if (!this.highlight || this.highlight.gene.id !== pick.id) this.selectGene(pick.id, pick.contig, { zoom: false });
     });
     v.on("select", (sel) => this.selectionInfo(sel));
+    // Expanded mode: the lanes take the viewer's place
+    const lanes = this.lanes;
+    lanes.on("navigate", (d) => {
+      this.ideo.set(this.genome.contig(d.contig), [d.start, d.end], this.markers());
+      $("#st-win").textContent = `${d.contig}:${fmt(d.start + 1)}-${fmt(d.end)} · ${fmtBp(d.end - d.start)}`;
+      $("#st-zoom").textContent = `${fmt(d.transcripts)} transcripts · ${d.bpp >= 1 ? `${fmt(d.bpp)} bases per pixel` : `${(1 / d.bpp).toFixed(1)} px per base`}`;
+    });
+    lanes.on("hover", (text, x, y, pos) => {
+      this.tooltip(text, x, y);
+      $("#st-pos").textContent = text && pos !== null && pos !== undefined ? `${lanes.gene.contig}:${fmt(pos + 1)}` : "";
+    });
+    lanes.on("pick", (id) => {
+      this.panel.pickTx(id);
+      this.panel.setMode("transcript");
+      this.tooltip(null);
+      this.toast(`${this.panel.tx.name} · press 3 to see every transcript again`, 3500);
+    });
+    lanes.on("error", (e) => this.toast(`Couldn't load: ${e.message}`));
     v.on("error", (e) => this.toast(`Couldn't load: ${e.message}`));
     this.karyo.on("open", (contig, pos) => {
       if (pos === null) this.showContig(contig);
@@ -225,6 +247,7 @@ class App {
     });
     this.karyo.on("hover", (text, x, y) => this.tooltip(text, x, y));
     this.ideo.on("seek", (pos) => {
+      if (this.lanes.active) return this.lanes.centreOn(pos);
       const d = v.describe();
       const half = Math.floor((d.end - d.start) / 2);
       v.show(d.contig, pos - half, pos + half, { zoom: v.state.zi });
@@ -277,13 +300,33 @@ class App {
     this.highlight = null;
     this.view.setHighlight(null);
     this.panel.clear();
+    this.syncLanes();
     this.refreshIdeo();
     if (push) this.pushState();
   }
 
   refreshIdeo() {
-    const d = this.view.describe();
+    const d = this.lanes.active ? this.lanes.describe() : this.view.describe();
     if (d) this.ideo.set(this.genome.contig(d.contig), [d.start, d.end], this.markers());
+  }
+
+  /** Expanded mode shows every transcript as lanes over the viewer; other modes, the genome. */
+  syncLanes() {
+    const h = this.highlight;
+    const on = !!h && h.mode === "expanded" && this.screen === "contig" && h.gene.contig === this.view.state.contig;
+    if (on) {
+      if (!this.lanes.active) this.tooltip(null);
+      this.view.paused = true;
+      this.lanes.show(h.gene, h.txs || (h.gene.tx ? [h.gene.tx] : []), h.tx ? h.tx.id : null);
+    } else if (this.lanes.active) {
+      this.tooltip(null);
+      this.lanes.hide();
+      this.view.paused = false;
+      this.view.dirtyFrame = true;
+      this.view.schedule();
+      const d = this.view.describe();
+      if (d) this.view.emit("navigate", d);
+    }
   }
 
   async gotoVariant(id) {
@@ -485,6 +528,7 @@ class App {
       if (!b) return;
       this.view.setOptions({ repeats: b.dataset.v });
       saveOptions(this.view.opts);
+      this.lanes.schedule();
       this.syncOptionInputs();
     });
     $("#wrap").addEventListener("click", (e) => {
@@ -540,10 +584,11 @@ class App {
       this.highlight = h.gene ? h : null;
       this.view.setHighlight(this.highlight);
       this.refreshIdeo();
+      this.syncLanes();
       if (!this.applying) this.replaceState();
     });
     this.panel.on("close", () => this.clearGene());
-    this.panel.on("zoom", (g) => this.showContig(g.contig, g.start, g.end));
+    this.panel.on("zoom", (g) => (this.lanes.active ? this.lanes.reset() : this.showContig(g.contig, g.start, g.end)));
     this.panel.on("download", (name, text) => this.download(name, text));
     this.panel.on("warn", (m) => this.toast(m));
   }
@@ -581,6 +626,7 @@ class App {
     this.ideo.draw();
     this.panel.palette = name;
     if (this.panel.gene) this.panel.renderPixels();
+    this.lanes.schedule();
     document.querySelectorAll("[data-pal]").forEach((b) => b.classList.toggle("on", b.dataset.pal === name));
     if (push) this.replaceState();
   }
@@ -630,7 +676,8 @@ class App {
   }
 
   zoom(steps) {
-    if (this.screen === "contig") this.view.zoomAt(steps);
+    if (this.lanes.active) this.lanes.zoom(steps);
+    else if (this.screen === "contig") this.view.zoomAt(steps);
   }
 
   addBookmark() {
@@ -653,6 +700,10 @@ class App {
 
   async snapshot() {
     if (this.screen !== "contig") return this.toast("Open a chromosome to take a picture");
+    if (this.lanes.active) {
+      const d = this.lanes.describe();
+      return this.downloadBlob(`gpxil_${this.lanes.gene.name}_transcripts_${d.contig}_${d.start + 1}-${d.end}.png`, await this.lanes.snapshot());
+    }
     const blob = await this.view.snapshot();
     const d = this.view.describe();
     this.downloadBlob(`gpxil_${d.contig}_${d.start + 1}-${d.end}.png`, blob);
@@ -716,6 +767,24 @@ class App {
       const v = this.view;
       const inView = this.screen === "contig";
       const page = inView ? v.visibleRows() * 0.85 : 0;
+      if (this.lanes.active) {
+        const ln = this.lanes;
+        const laneKeys = {
+          ArrowLeft: () => ln.pan(e.shiftKey ? -300 : -60),
+          ArrowRight: () => ln.pan(e.shiftKey ? 300 : 60),
+          ArrowUp: () => ln.scroll(-40),
+          ArrowDown: () => ln.scroll(40),
+          PageUp: () => ln.scroll(-ln.css.h * 0.8),
+          PageDown: () => ln.scroll(ln.css.h * 0.8),
+          " ": () => ln.scroll((e.shiftKey ? -1 : 1) * ln.css.h * 0.8),
+          Home: () => ln.scroll(-1e9),
+          End: () => ln.scroll(1e9),
+        }[e.key];
+        if (laneKeys) {
+          e.preventDefault();
+          return laneKeys();
+        }
+      }
       const act = {
         "/": () => $("#search").focus(),
         g: () => $("#search").focus(),

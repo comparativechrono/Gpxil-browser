@@ -31,7 +31,7 @@ DEFAULTS = {
     "hgnc": "https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/hgnc_complete_set.txt",
     "bands": "https://rest.ensembl.org/info/assembly/homo_sapiens?bands=1;content-type=application/json",
 }
-DATA_VERSION = 1  # bump when the layout of the data files changes
+DATA_VERSION = 2  # bump when the layout of the data files changes
 
 
 def main(argv=None) -> int:
@@ -44,7 +44,8 @@ def main(argv=None) -> int:
     ap.add_argument("--skip-sequence", action="store_true", help="reuse gpxil/ and overview/ from an earlier build")
     a = ap.parse_args(argv)
     os.makedirs(a.out, exist_ok=True)
-    paths = {k: fetch(getattr(a, k), a.cache) for k in DEFAULTS}
+    # the FASTA (about 1 GB) is only needed when the sequence is encoded
+    paths = {k: fetch(getattr(a, k), a.cache) for k in DEFAULTS if not (k == "fasta" and a.skip_sequence)}
     only = set(a.only.split(",")) if a.only else None
     manifest_path = os.path.join(a.out, "manifest.json")
 
@@ -64,6 +65,7 @@ def main(argv=None) -> int:
         g = genes["per_contig"].get(c["name"])
         c["genes"] = g["file"] if g else None
         c["gene_count"] = g["count"] if g else 0
+        c["transcripts"] = g["transcripts"] if g else None
     bands = build_bands(paths["bands"], a.out)
     write_json(os.path.join(a.out, "karyotype.json"), seq["karyotype"])
 
@@ -75,7 +77,7 @@ def main(argv=None) -> int:
         "generator": f"gpxil-browser pipeline, gpxiltools {gpxiltools.__version__}",
         "sources": {
             "sequence": f"Ensembl release {ENSEMBL_RELEASE}: {os.path.basename(DEFAULTS['fasta'])}",
-            "genes": f"Ensembl release {ENSEMBL_RELEASE}: {os.path.basename(DEFAULTS['gtf'])} (canonical transcripts)",
+            "genes": f"Ensembl release {ENSEMBL_RELEASE}: {os.path.basename(DEFAULTS['gtf'])} (all transcripts)",
             "names": "HGNC complete set (approved symbols, names, aliases, cross-references)",
             "bands": f"Ensembl REST API, info/assembly ({bands['assembly']})",
             "rest": "https://rest.ensembl.org",
@@ -83,7 +85,7 @@ def main(argv=None) -> int:
         "sequence": {k: v for k, v in seq.items() if k != "karyotype"},
         "karyotype": "karyotype.json",
         "cytobands": bands["file"],
-        "genes": {"index": genes["index"], "aliases": genes["aliases"], "count": genes["count"]},
+        "genes": {"index": genes["index"], "aliases": genes["aliases"], "count": genes["count"], "transcripts": genes["transcripts"]},
     }
     total = 0
     for root, _, files in os.walk(a.out):

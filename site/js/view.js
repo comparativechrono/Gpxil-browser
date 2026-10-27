@@ -387,6 +387,7 @@ export class PixelView extends Emitter {
 
   draw() {
     this.raf = 0;
+    if (this.paused) return; // covered by the transcript lanes (Expanded mode)
     const c = this.contig;
     const { ctx } = this;
     const { dpr, w: cw, h: ch } = this.css;

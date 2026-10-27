@@ -229,6 +229,19 @@ def main() -> int:
         check("Zoom to gene leaves the karyotype", st == ["contig", "chr17"], str(st))
         ctx.close()
 
+        # Expanded shows every transcript as lanes, from the site's own data; clicking a lane opens that transcript
+        ctx, page, errors = new_page(browser, url, "#chr17:7661779-7687538&gene=ENSG00000141510&mode=expanded")
+        page.wait_for_timeout(1500)
+        n = page.evaluate("window.gpxil.lanes.active && window.gpxil.lanes.txs.length")
+        box = page.query_selector("#lanes").bounding_box()
+        y = page.evaluate("window.gpxil.lanes.laneTop(3) + window.gpxil.lanes.laneH() / 2")
+        picked = page.evaluate("window.gpxil.lanes.txs[2].id")
+        page.mouse.click(box["x"] + box["width"] * 0.6, box["y"] + y)
+        page.wait_for_timeout(1000)
+        st = page.evaluate("[window.gpxil.panel.mode, window.gpxil.panel.tx.id, window.gpxil.lanes.active, window.gpxil.view.paused]")
+        check("Expanded shows every transcript; a click opens one", bool(n) and n >= 30 and st == ["transcript", picked, False, False] and not errors, f"{n} lanes; {st}")
+        ctx.close()
+
         # selenocysteine: GPX1's Sec49 is U, not a stop
         ctx, page, errors = new_page(browser, url, "#genome")
         r = page.evaluate("(async () => { const r = await window.gpxil.genes.resolve('GPX1'); return [r.row[1], r.row[2]]; })()")

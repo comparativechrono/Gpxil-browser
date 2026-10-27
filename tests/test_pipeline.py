@@ -142,7 +142,7 @@ def test_genes(data, manifest, expected):
     assert starts == sorted(starts)
     for gid, row in rows.items():
         e = expected["genes"][gid]
-        _id, name, start, end, strand, biotype, hgnc_name, tx, xref = row
+        _id, name, start, end, strand, biotype, hgnc_name, tx, xref, where = row
         assert (name, start, end, strand) == (e["name"], e["start"], e["end"], e["strand"])
         txid, txname, txbio, mane, ts, te, flat, cds, incomplete, *sec = tx
         exons = [[ts + flat[i], ts + flat[i + 1]] for i in range(0, len(flat), 2)]
@@ -163,6 +163,38 @@ def test_genes(data, manifest, expected):
     assert not os.path.exists(os.path.join(data, "genes/chr2.json.gz"))  # no genes there
     files = {c["name"]: c["genes"] for c in manifest["sequence"]["contigs"]}
     assert files["chr1"] == "genes/chr1.json.gz" and files["chr2"] is None
+
+
+def test_transcripts(data, manifest, expected):
+    """Every transcript, one gzip member per gene, found through the gene rows."""
+    files = {c["name"]: c["transcripts"] for c in manifest["sequence"]["contigs"]}
+    assert files["chr1"] == "transcripts/chr1.bin" and files["chrM"] == "transcripts/chrM.bin" and files["chr2"] is None
+    assert manifest["genes"]["transcripts"] == 5  # PIXL1 has two
+    with open(os.path.join(data, files["chr1"]), "rb") as fh:
+        blob = fh.read()
+    rows = {r[0]: r for r in gz_json(data, "genes/chr1.json.gz")["genes"]}
+    members = []
+    for gid, row in rows.items():
+        off, length, n = row[9]
+        txs = json.loads(gzip.decompress(blob[off : off + length]))
+        assert len(txs) == n
+        members.append((off, length))
+        g0 = row[2]
+        canonical = txs[0]
+        assert canonical[0] == row[7][0] and canonical[3] & 1  # canonical first, flagged
+        e = expected["genes"][gid]
+        assert [[g0 + canonical[6][i], g0 + canonical[6][i + 1]] for i in range(0, len(canonical[6]), 2)] == e["exons"]
+        if e["cds"]:
+            assert [g0 + canonical[7][0], g0 + canonical[7][1]] == e["cds"]
+    # the members tile the file
+    members.sort()
+    assert members[0][0] == 0 and sum(n for _, n in members) == len(blob)
+    pixl1 = json.loads(gzip.decompress(blob[rows["ENSG00000000001"][9][0] :][: rows["ENSG00000000001"][9][1]]))
+    assert [t[0] for t in pixl1] == ["ENST00000000011", "ENST00000000012"]
+    assert pixl1[0][3] == 1 | 2 | 8  # canonical, MANE Select, basic
+    assert pixl1[1][3] == 8 and pixl1[1][7] is None  # basic, non-coding
+    assert pixl1[1][6] == [0, 100, 10000, 10300]  # exons relative to the gene start
+    assert pixl1[0][9] == [5070]  # the selenocysteine codon, relative too
 
 
 def test_index_and_aliases(data):

@@ -342,6 +342,22 @@ main {
   flex: 1;
   display: flex;
   min-height: 0;
+  position: relative;
+}
+/* Expanded mode: every transcript of the gene on its own lane, over the viewer */
+#lanes {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: var(--bg);
+  touch-action: none;
+  z-index: 2;
+}
+#lanes[hidden] {
+  display: none;
+}
+.mode-hint {
+  margin: 6px 0 2px;
 }
 #gutter {
   width: 118px;

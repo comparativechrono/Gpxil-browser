@@ -67,6 +67,7 @@
           <div class="viewer">
             <canvas id="gutter" aria-hidden="true"></canvas>
             <div class="canvas-wrap"><canvas id="view" tabindex="0" aria-label="Genome pixels: arrow keys scroll, plus and minus zoom"></canvas></div>
+            <canvas id="lanes" hidden tabindex="0" aria-label="Every transcript of the gene, one lane each: click a lane to open that transcript"></canvas>
           </div>
         </section>
       </main>
@@ -143,7 +144,7 @@
         <tr><td>/ or G</td><td>search</td></tr>
         <tr><td>K</td><td>karyotype</td></tr>
         <tr><td>R</td><td>random gene</td></tr>
-        <tr><td>1 2 3</td><td>gene, transcript, expanded</td></tr>
+        <tr><td>1 2 3</td><td>gene, one transcript, every transcript (expanded)</td></tr>
         <tr><td>[ ]</td><td>previous / next gene</td></tr>
         <tr><td>P</td><td>save a picture</td></tr>
         <tr><td>Esc</td><td>clear</td></tr>
@@ -151,7 +152,7 @@
       <p>Search for genes (symbols, old names, Ensembl IDs), places (<code>chr7:117,480,025-117,668,665</code>, <code>X:73.8M</code>), bands (<code>17q21.31</code>) or variants (<code>rs334</code>).</p>
       <h3>What you are looking at</h3>
       <p>This is a browser for <a href="https://github.com/comparativechrono/Gpxil" target="_blank" rel="noopener">gpxil</a>, a file format that stores genomes as images, after Guenter Albrecht-Buehler's genome pixel images (<a href="https://doi.org/10.1371/journal.pone.0004701" target="_blank" rel="noopener">PLoS ONE, 2009</a>). The bases come straight from the GRCh38 gpxil files: the browser reads just the strips of pixels it needs with HTTP range requests.</p>
-      <p>Only when you ask for them, a few things come live from other databases: transcripts beyond the canonical one, variants, regulatory elements and rsID lookups from the <a href="https://rest.ensembl.org" target="_blank" rel="noopener">Ensembl REST API</a>, and gene summaries from NCBI Gene via <a href="https://mygene.info" target="_blank" rel="noopener">MyGene.info</a>.</p>
+      <p>Only when you ask for them, a few things come live from other databases: variants, regulatory elements, rsID lookups and names the gene index doesn't know from the <a href="https://rest.ensembl.org" target="_blank" rel="noopener">Ensembl REST API</a>, and gene summaries from NCBI Gene via <a href="https://mygene.info" target="_blank" rel="noopener">MyGene.info</a>.</p>
       <p id="data-sources"></p>
     </dialog>
   </body>
