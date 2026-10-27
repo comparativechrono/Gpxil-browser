@@ -13,6 +13,7 @@ import { Landing } from "./landing.js";
 import { DnaLoader } from "./loader.js";
 import { LIMITS, LiveTracks } from "./live.js";
 import { TranscriptLanes } from "./lanes.js";
+import { safeName } from "./pxil.js";
 import { IUPAC, PALETTES, buildLut, hasPalette, inkOn } from "./palettes.js";
 import { gcFraction, lettersOf, wrapFasta } from "./seq.js";
 import { clamp, debounce, escapeHtml, fetchJson, fetchJsonGz, fmt, fmtBp, storageGet, storageSet } from "./util.js";
@@ -453,7 +454,7 @@ class App {
         <button data-sel="clear">Clear</button>
       </div>
       <p class="links"><a target="_blank" rel="noopener" href="https://www.ensembl.org/Homo_sapiens/Location/View?r=${ens}:${a + 1}-${b}">Ensembl</a> · <a target="_blank" rel="noopener" href="https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=${c}:${a + 1}-${b}">UCSC</a> · <a target="_blank" rel="noopener" href="https://www.ncbi.nlm.nih.gov/genome/gdv/browser/genome/?id=GCF_000001405.40&chr=${ens}&from=${a + 1}&to=${b}">NCBI</a></p>`;
-    this.selection = { contig: c, start: a, end: b };
+    this.selection = { contig: c, start: a, end: b, variant: variant && variant.id ? variant.id : null };
     this.showTab("here");
   }
 
@@ -478,7 +479,11 @@ class App {
         this.toast("The browser didn't allow copying; use FASTA instead");
       }
     } else if (act === "fasta") {
-      this.download(`${s.contig}_${s.start + 1}-${s.end}.fa`, wrapFasta(`${s.contig}:${s.start + 1}-${s.end} GRCh38`, seq));
+      // the file is named after what was selected: a variant's ID, or the highlighted gene it lies in
+      const g = s.variant ? null : this.geneIn(s.contig, s.start, s.end);
+      const who = s.variant ? safeName(s.variant) : g ? `${safeName(g.name)}_${g.id}` : "";
+      const head = `${s.contig}:${s.start + 1}-${s.end} GRCh38${s.variant ? ` ${s.variant}` : g ? ` ${g.id} ${g.name}` : ""}`;
+      this.download(`${who ? `${who}_` : ""}${s.contig}_${s.start + 1}-${s.end}.fa`, wrapFasta(head, seq));
     }
   }
 
@@ -596,7 +601,6 @@ class App {
     });
     this.panel.on("close", () => this.clearGene());
     this.panel.on("zoom", (g) => (this.lanes.active ? this.lanes.reset() : this.showContig(g.contig, g.start, g.end)));
-    this.panel.on("download", (name, text) => this.download(name, text));
     this.panel.on("file", (name, blob) => {
       this.downloadBlob(name, blob);
       this.toast(`⇩ ${name}`, 2500);
@@ -711,16 +715,18 @@ class App {
 
   async snapshot() {
     if (this.screen !== "contig") return this.toast("Open a chromosome to take a picture");
-    // with a gene highlighted, the picture's name carries its Ensembl ID
-    const g = this.highlight && this.highlight.gene.contig === this.view.state.contig ? this.highlight.gene : null;
-    const who = g ? `${g.name}_${g.id}_` : "";
-    if (this.lanes.active) {
-      const d = this.lanes.describe();
-      return this.downloadBlob(`gpxil_${who}transcripts_${d.contig}_${d.start + 1}-${d.end}.png`, await this.lanes.snapshot());
-    }
-    const blob = await this.view.snapshot();
-    const d = this.view.describe();
-    this.downloadBlob(`gpxil_${who}${d.contig}_${d.start + 1}-${d.end}.png`, blob);
+    // with a highlighted gene in the picture, its name carries the gene's Ensembl ID
+    const d = this.lanes.active ? this.lanes.describe() : this.view.describe();
+    const g = this.geneIn(d.contig, d.start, d.end);
+    const who = g ? `${safeName(g.name)}_${g.id}_` : "";
+    if (this.lanes.active) return this.downloadBlob(`gpxil_${who}transcripts_${d.contig}_${d.start + 1}-${d.end}.png`, await this.lanes.snapshot());
+    this.downloadBlob(`gpxil_${who}${d.contig}_${d.start + 1}-${d.end}.png`, await this.view.snapshot());
+  }
+
+  /** The highlighted gene, if it overlaps [start, end) of a contig: downloads of that stretch carry its Ensembl ID. */
+  geneIn(contig, start, end) {
+    const g = this.highlight && this.highlight.gene;
+    return g && g.contig === contig && g.start < end && start < g.end ? g : null;
   }
 
   /** The downloads dialog: the genome as gpxil files, and links to the formats. */

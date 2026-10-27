@@ -278,6 +278,21 @@ def main() -> int:
         d.value.save_as(z)
         n = len(zipfile.ZipFile(z).namelist())
         check("zip of every transcript", d.value.suggested_filename == "TP53_ENSG00000141510.pxil.zip" and n >= 30 and zipfile.ZipFile(z).testzip() is None, f"{d.value.suggested_filename}: {n} files")
+        # other downloads are named after the gene or variant they show
+        names = []
+        for sel, variant in (([7670000, 7670100], "null"), ([7676153, 7676154], "{id: 'rs1042522', alleles: 'G/C', consequence: 'missense_variant'}")):
+            page.evaluate(f"(async () => {{ const g = window.gpxil; g.view.setSelection({sel}); await g.selectionInfo({sel}, {variant}); }})()")
+            with page.expect_download(timeout=30000) as d:
+                page.click("[data-sel=fasta]")
+            names.append(d.value.suggested_filename)
+        with page.expect_download(timeout=30000) as d:
+            page.evaluate("window.gpxil.snapshot(); 0")
+        names.append(d.value.suggested_filename)
+        check(
+            "FASTA and pictures carry Ensembl IDs",
+            names[:2] == ["TP53_ENSG00000141510_chr17_7670001-7670100.fa", "rs1042522_chr17_7676154-7676154.fa"] and names[2].startswith("gpxil_TP53_ENSG00000141510_chr17_"),
+            str(names),
+        )
         page.click("#downloads-btn")
         page.wait_for_timeout(300)
         files = page.evaluate("[...document.querySelectorAll('#dl-files a')].map(a => a.getAttribute('href'))")
