@@ -62,7 +62,7 @@
         <section id="genome-view" class="screen" aria-label="Karyotype">
           <div class="screen-head">
             <h2>Human genome <small>GRCh38 · 3.1 billion bases · <span id="gene-count"></span></small></h2>
-            <p class="legend">Each chromosome is a column of pixels, one per 131,072 bases, in the colours of the palette (pale = repeats, grey = unknown N). Bands on the left, protein-coding genes on the right. <b>Click anywhere to dive in.</b></p>
+            <p class="legend">Each chromosome is a column of pixels, one per 131,072 bases, in the colours of the palette (pale = repeats; unknown bases, N, are near-black in the classic colours). Bands on the left, protein-coding genes on the right. <b>Click anywhere to dive in.</b></p>
           </div>
           <div class="karyo-wrap"><canvas id="karyo" aria-label="Chromosomes"></canvas></div>
         </section>
@@ -139,7 +139,7 @@
     <dialog id="help">
       <form method="dialog"><button class="icon close" aria-label="Close">✕</button></form>
       <h2>How to fly the pixelverse</h2>
-      <p>Every pixel is one base of the human reference genome (GRCh38): <span class="sw a">A</span> <span class="sw c">C</span> <span class="sw g">G</span> <span class="sw t">T</span>, pale where the base is in a repeat, grey for unknown (N). Zoomed out, a pixel is the average colour of the bases it covers. Rows wrap like lines of text.</p>
+      <p>Every pixel is one base of the human reference genome (GRCh38): <span class="sw a">A</span> <span class="sw c">C</span> <span class="sw g">G</span> <span class="sw t">T</span>, pale where the base is in a repeat, near-black where it isn't known (N). Zoomed out, a pixel is the average colour of the bases it covers. Rows wrap like lines of text.</p>
       <table class="keys">
         <tr><td>scroll / drag</td><td>move along the chromosome</td></tr>
         <tr><td>ctrl + scroll, pinch, + −</td><td>zoom</td></tr>

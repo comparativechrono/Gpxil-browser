@@ -1,12 +1,14 @@
 // Palettes turn gpxil codes into colours at display time (spec section 12).
 // The four gpxil palettes match gpxiltools exactly; "neon" and "gc" are
-// extra views for this browser.
+// extra views for this browser. N (not known) is never faded for repeats, and in
+// the classic and Okabe-Ito colours it is near-black: a grey N would look like a
+// mixture (in classic, C blue and T yellow average to mid-grey).
 
 export const PALETTES = {
   classic: {
     label: "Classic",
     about: "A red, C blue, G green, T yellow: the colours of the original gpxil notebooks.",
-    rgb: { A: [255, 0, 0], C: [0, 0, 255], G: [0, 255, 0], T: [255, 255, 0], N: [128, 128, 128], gap: [255, 255, 255] },
+    rgb: { A: [255, 0, 0], C: [0, 0, 255], G: [0, 255, 0], T: [255, 255, 0], N: [32, 32, 32], gap: [255, 255, 255] },
     mix: "mean",
     fade: 0.45,
     fadeTo: [255, 255, 255],
@@ -22,7 +24,7 @@ export const PALETTES = {
   "okabe-ito": {
     label: "Okabe-Ito",
     about: "Colour-blind safe, in the IGV order: A green, C blue, G orange, T vermillion.",
-    rgb: { A: [0, 158, 115], C: [0, 114, 178], G: [230, 159, 0], T: [213, 94, 0], N: [153, 153, 153], gap: [255, 255, 255] },
+    rgb: { A: [0, 158, 115], C: [0, 114, 178], G: [230, 159, 0], T: [213, 94, 0], N: [32, 32, 32], gap: [255, 255, 255] },
     mix: "mean",
     fade: 0.45,
     fadeTo: [255, 255, 255],
@@ -57,13 +59,20 @@ export const BASES = ["A", "C", "G", "T"];
 export const SOFTMASK = 0x10;
 export const IUPAC = "-ACMGRSVTWYHKDBN"; // index = 4-bit code
 
+/** Rounds as Python does (a half to the even neighbour), so that mixtures come out exactly as gpxiltools makes them:
+    Okabe-Ito's A/C is 146.5 blue, which gpxiltools rounds to 146 */
+const pyRound = (x) => {
+  const r = Math.round(x);
+  return Math.abs(x - Math.trunc(x)) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+};
+
 function mix(cols, how) {
-  if (how === "overprint") return [0, 1, 2].map((i) => Math.round(cols.reduce((p, c) => p * (c[i] / 255), 1) * 255));
-  return [0, 1, 2].map((i) => Math.round(cols.reduce((s, c) => s + c[i], 0) / cols.length));
+  if (how === "overprint") return [0, 1, 2].map((i) => pyRound(cols.reduce((p, c) => p * (c[i] / 255), 1) * 255));
+  return [0, 1, 2].map((i) => pyRound(cols.reduce((s, c) => s + c[i], 0) / cols.length));
 }
 
 function fade(c, t, to) {
-  return c.map((v, i) => Math.round(v + (to[i] - v) * t));
+  return c.map((v, i) => pyRound(v + (to[i] - v) * t));
 }
 
 /** True for the name of a palette (and not, say, "toString", which every object has). */
@@ -80,7 +89,8 @@ export function buildLut(name) {
     else if (low === 0) c = p.rgb.gap;
     else if (low === 15) c = p.rgb.N;
     else c = mix(BASES.filter((b, i) => low & (1 << i)).map((b) => p.rgb[b]), p.mix);
-    if (code & SOFTMASK && low !== 0) c = fade(c, p.fade, p.fadeTo);
+    // (soft-masked bases fade; N and no base don't)
+    if (code & SOFTMASK && low !== 0 && low !== 15) c = fade(c, p.fade, p.fadeTo);
     rgb.set(c, code * 3);
   }
   const packed = new Uint32Array(256);

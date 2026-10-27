@@ -170,6 +170,10 @@ export class Karyotype extends Emitter {
       tmp.getContext("2d").putImageData(img, 0, 0);
       const cx = x0 + 8;
       ctx.drawImage(tmp, cx, y0, L.per * L.px, rows * L.px);
+      // (a faint outline, so that a chromosome keeps its shape where it is N, which is near-black on this dark page)
+      ctx.strokeStyle = "rgba(200, 200, 240, 0.3)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - 0.5, y0 - 0.5, L.per * L.px + 1, shown * L.px + 1);
       // cytoband stripe
       const bands = this.cytobands[c.name];
       if (bands) {

@@ -321,7 +321,18 @@ test("palettes", () => {
     const masked = [...lut.rgb.subarray(3 * 0x11, 3 * 0x11 + 3)];
     if (PALETTES[name].fade) assert.notDeepEqual(a, masked, name);
     else assert.deepEqual(a, masked, name);
+    // N is never faded, and never the colour of a base or a mixture (classic's mid-grey N was the mean of C and T)
+    const n = [...lut.rgb.subarray(3 * 15, 3 * 15 + 3)];
+    assert.deepEqual([...lut.rgb.subarray(3 * 0x1f, 3 * 0x1f + 3)], n, name);
+    for (let code = 1; code < 32; code++) {
+      if ((code & 15) === 15 || name === "gc") continue; // (the GC view gives A and T, and C and G, one colour each)
+      assert.notDeepEqual([...lut.rgb.subarray(3 * code, 3 * code + 3)], n, `${name}: code ${code} looks like N`);
+    }
   }
+  assert.deepEqual([...buildLut("classic").rgb.subarray(3 * 10, 3 * 10 + 3)], [128, 128, 128]); // C/T: mid-grey
+  assert.deepEqual(PALETTES.classic.rgb.N, [32, 32, 32]);
+  // mixtures round as gpxiltools rounds them (a half to even): Okabe-Ito's A/C is 0, 136, 146.5
+  assert.deepEqual([...buildLut("okabe-ito").rgb.subarray(3 * 3, 3 * 3 + 3)], [0, 136, 146]);
   // names every object has are not palettes (a link with pal=toString must not break the site)
   assert.equal(hasPalette("toString"), false);
   assert.equal(hasPalette("__proto__"), false);
