@@ -1,0 +1,63 @@
+# Publishes the whole GRCh38 reference as one gpxil file, as a release asset.
+# The file (about 850 MB) is too big to sit beside the browser on GitHub Pages,
+# which serves the same sequence as one gpxil file per chromosome.
+#
+# Run it by hand: Actions -> GRCh38 gpxil release -> Run workflow. It takes
+# about half an hour, most of it downloading the genome from Ensembl.
+
+name: GRCh38 gpxil release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-grch38
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TAG: grch38-ensembl116
+      FASTA: https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install gpxiltools
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Download GRCh38 (Ensembl 116, soft-masked primary assembly)
+        run: curl -fsSL --retry 5 --retry-delay 30 -o "$RUNNER_TEMP/grch38.fa.gz" "$FASTA"
+
+      - name: Encode it as one gpxil file
+        run: |
+          gpxil encode "$RUNNER_TEMP/grch38.fa.gz" -o GRCh38.gpxil.tif --ucsc-names --reference-name GRCh38 --level 9
+          gpxil validate GRCh38.gpxil.tif
+          gpxil info GRCh38.gpxil.tif > info.txt
+          head -n 40 info.txt
+          sha256sum GRCh38.gpxil.tif > GRCh38.gpxil.tif.sha256
+          ls -l GRCh38.gpxil.tif GRCh38.gpxil.tif.sha256
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python -c 'import gpxiltools; print(gpxiltools.__version__)')
+          notes="The GRCh38 reference genome (Ensembl release 116, soft-masked primary assembly) as one gpxil file: a reference page for each of its 194 chromosomes and scaffolds, 8,192 bases per row, written by gpxiltools ${version}. The Gpxil browser (https://comparativechrono.github.io/Gpxil-browser/) reads the same sequence as one file per chromosome.
+
+          Check the download with: sha256sum -c GRCh38.gpxil.tif.sha256
+
+          The format: https://github.com/comparativechrono/Gpxil. The sequence comes from Ensembl, which imposes no restrictions on its use. Built by the Gpxil browser's pipeline, © 2026 Chronomic Medicine Group, Department of Genomic Medicine, University of Cambridge (MIT licence)."
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" GRCh38.gpxil.tif GRCh38.gpxil.tif.sha256 --clobber
+          else
+            gh release create "$TAG" GRCh38.gpxil.tif GRCh38.gpxil.tif.sha256 --title "GRCh38 as one gpxil file (Ensembl 116)" --notes "$notes"
+          fi

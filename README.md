@@ -64,8 +64,26 @@ It is a static site for GitHub Pages: **https://comparativechrono.github.io/Gpxi
 - The spliced mRNA and the protein drawn as pixels (one pixel per amino acid,
   translated here, with the mitochondrial code on chrM and selenocysteine where
   Ensembl marks it); hover for codon and position.
-- Genomic, mRNA and protein FASTA downloads; the NCBI Gene summary; links to
-  Ensembl, NCBI Gene, HGNC, UniProt and OMIM; previous and next gene (`[` `]`).
+- The NCBI Gene summary; links to Ensembl, NCBI Gene, HGNC, UniProt and OMIM;
+  previous and next gene (`[` `]`).
+
+**Take the pixels home**
+
+- **pxil files** of the gene, the transcript and the protein you are looking
+  at (`gene.pxil`, `transcript.pxil`, `protein.pxil`), or of any number of the
+  gene's transcripts and proteins at once, zipped. Every file name carries the
+  Ensembl ID (ENSG, ENST or ENSP), for example
+  `TP53-201_ENSP00000269305.protein.pxil`. [pxil](https://github.com/comparativechrono/pxil)
+  is a simple format for single sequences: a PNG image, one pixel per base or
+  amino acid, whose pixel values are the sequence, so it opens in image
+  software and reads back exactly. It is meant for quick analysis and sharing,
+  not for keeping genomes.
+- **The genome as gpxil**: every chromosome's gpxil file (the files the browser
+  reads), and the whole of GRCh38 in one file, `GRCh38.gpxil.tif`, published as
+  a [release](https://github.com/comparativechrono/Gpxil-browser/releases)
+  because it is too big for the site.
+- Links to the [gpxil specification](https://github.com/comparativechrono/Gpxil/blob/main/gpxil-spec.pdf)
+  and the [pxil specification](https://github.com/comparativechrono/pxil/blob/main/pxil-spec.pdf).
 
 **Like a traditional browser, but in pixels**
 
@@ -146,6 +164,11 @@ deployment**, set **Source** to **GitHub Actions**.
 
 The whole site is about 920 MB, inside GitHub Pages' 1 GB limit for a site.
 
+The whole genome in one gpxil file does not fit beside it, so
+[`.github/workflows/release-grch38.yml`](.github/workflows/release-grch38.yml),
+run by hand (**Actions → GRCh38 gpxil release → Run workflow**), encodes it
+with gpxiltools and publishes it as a release asset, which may be up to 2 GB.
+
 ## Tests
 
 ```sh
@@ -184,7 +207,13 @@ keep their zoom, late Ensembl answers, pinches, keyboard use and so on).
 - [Gpxil](https://github.com/comparativechrono/Gpxil): the gpxil specification.
 - [Gpxil-tools](https://github.com/comparativechrono/Gpxil-tools): `gpxiltools`,
   the Python reference implementation the pipeline uses.
+- [pxil](https://github.com/comparativechrono/pxil): the pxil format for single
+  sequences, with a Python reader.
 
 ## Licence
 
-No licence has been chosen for this repository yet.
+Copyright © 2026 Chronomic Medicine Group, Department of Genomic Medicine,
+University of Cambridge.
+
+The Gpxil browser is released under the [MIT licence](LICENSE). The data it
+serves comes from the sources above, under their own terms.

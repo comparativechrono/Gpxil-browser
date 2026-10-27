@@ -18,6 +18,7 @@ import { parsePlace } from "../../site/js/search.js";
 import { cdsRange, gcFraction, lettersOf, markSelenocysteine, revcomp, spliced, translate, wrapFasta } from "../../site/js/seq.js";
 import { PALETTES, buildLut, binColour, hasPalette, inkOn } from "../../site/js/palettes.js";
 import { LIMITS, LiveTracks } from "../../site/js/live.js";
+import { DNA, PROTEIN, crc32, indicesOf, pxilFile, safeName, zip } from "../../site/js/pxil.js";
 import { LRU, busyWith, fetchJsonGz, fmtBp, lowerBound, track, upperBound } from "../../site/js/util.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -213,12 +214,13 @@ test("genes: overlap queries, lookups and search", async () => {
   const t1 = await db.transcripts(p1);
   assert.equal(requests, before + 1);
   assert.deepEqual(
-    t1.txs.map((t) => [t.id, t.canonical, t.mane, !!t.cds]),
+    t1.txs.map((t) => [t.id, t.canonical, t.mane, !!t.cds, t.protein]),
     [
-      ["ENST00000000011", true, true, true],
-      ["ENST00000000012", false, false, false],
+      ["ENST00000000011", true, true, true, "ENSP00000000011"],
+      ["ENST00000000012", false, false, false, null],
     ]
   );
+  assert.equal(p1.tx.protein, "ENSP00000000011");
   assert.deepEqual(t1.txs[0].exons, p1.tx.exons);
   assert.deepEqual(t1.txs[0].cds, p1.tx.cds);
   assert.deepEqual(t1.txs[0].sec, p1.tx.sec);
@@ -423,4 +425,55 @@ test("live tracks: answers for an old window, or a track switched off, are dropp
   } finally {
     f.restore();
   }
+});
+
+// ---------------------------------------------------------------- pxil files and zips, checked with Python (Pillow, zipfile)
+
+test("pxil files are PNGs whose pixels read back as the sequence", async () => {
+  const out = path.join(ROOT, "tests", ".fixture", "out");
+  fs.mkdirSync(out, { recursive: true });
+  // a gene with soft-masked bases, ambiguity codes and Ns, and a protein with selenocysteine and a stop
+  const dna = "ACGTacgtNNRYacgtTTGA".repeat(13) + "AC";
+  const protein = "MEEPQSDPSVUEPPLSQ*";
+  const files = [
+    { name: "x.gene.pxil", seq: dna, alphabet: DNA, width: 30, kind: "gene" },
+    { name: "x.protein.pxil", seq: protein, alphabet: PROTEIN, width: 7, kind: "protein" },
+  ];
+  for (const f of files) {
+    const colours = [...f.alphabet].map((_, i) => [i * 8, 255 - i * 8, 100]);
+    f.bytes = await pxilFile({ indices: indicesOf(f.seq, f.alphabet), alphabet: f.alphabet, width: f.width, colours, meta: { kind: f.kind, id: "ENSX1", name: "X" }, sequence: f.seq });
+    fs.writeFileSync(path.join(out, f.name), f.bytes);
+  }
+  fs.writeFileSync(path.join(out, "x.zip"), zip(files.map((f) => ({ name: f.name, bytes: f.bytes }))));
+  const py = `
+import json, sys, zipfile, hashlib
+from PIL import Image
+out = {}
+for name in sys.argv[2:]:
+    im = Image.open(sys.argv[1] + "/" + name)
+    meta = json.loads(im.info["pxil"])
+    idx = im.tobytes()[: meta["length"]]
+    seq = "".join(meta["alphabet"][i] for i in idx)
+    out[name] = {"mode": im.mode, "size": list(im.size), "meta": meta, "seq": seq, "pad": set(im.tobytes()[meta["length"]:]) <= {0},
+                 "sha_ok": meta["sha256"] == hashlib.sha256(seq.encode()).hexdigest(), "bits": im.info.get("bits", 8)}
+z = zipfile.ZipFile(sys.argv[1] + "/x.zip")
+out["zip"] = {"names": z.namelist(), "bad": z.testzip(), "same": all(z.read(n) == open(sys.argv[1] + "/" + n, "rb").read() for n in z.namelist())}
+print(json.dumps(out))
+`;
+  const r = JSON.parse(execFileSync(process.env.PYTHON || "python3", ["-c", py, out, ...files.map((f) => f.name)], { encoding: "utf8" }));
+  for (const f of files) {
+    const g = r[f.name];
+    assert.equal(g.mode, "P");
+    assert.deepEqual(g.size, [f.width, Math.ceil(f.seq.length / f.width)]);
+    assert.equal(g.seq, f.seq);
+    assert.equal(g.pad, true);
+    assert.equal(g.sha_ok, true);
+    assert.equal(g.meta.pxil, "0.1");
+    assert.equal(g.meta.kind, f.kind);
+    assert.equal(g.meta.length, f.seq.length);
+  }
+  assert.deepEqual(r.zip, { names: ["x.gene.pxil", "x.protein.pxil"], bad: null, same: true });
+  assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926); // the standard check value
+  assert.equal(safeName("TP53-201 / α"), "TP53-201_");
+  assert.throws(() => indicesOf("ACGX", DNA));
 });

@@ -149,7 +149,7 @@ def test_genes(data, manifest, expected):
         assert exons == e["exons"]
         assert (sec[0] if sec else []) == e["sec"]  # selenocysteine codons, only when there are some
         if e["cds"]:
-            assert cds == [e["cds"][0], e["cds"][1], 0]
+            assert cds == [e["cds"][0], e["cds"][1], 0, txid.replace("ENST", "ENSP")]  # with the Ensembl protein ID
         else:
             assert cds is None
     pixl1 = rows["ENSG00000000001"]

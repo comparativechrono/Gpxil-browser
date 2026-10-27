@@ -140,7 +140,8 @@ class Gene:
                 ps, pe = max(s, cs), min(e, ce)
                 if ps < pe:
                     frame = (3 - done % 3) % 3
-                    lines.append(f'{contig_name}\tensembl_havana\tCDS\t{ps + 1}\t{pe}\t.\t{st}\t{frame}\t{t} exon_number "{k}";')
+                    protein = txid.replace("ENST", "ENSP")
+                    lines.append(f'{contig_name}\tensembl_havana\tCDS\t{ps + 1}\t{pe}\t.\t{st}\t{frame}\t{t} exon_number "{k}"; protein_id "{protein}"; protein_version "1";')
                     done += pe - ps
                 qs, qe = max(s, stop[0]), min(e, stop[1])
                 if qs < qe:

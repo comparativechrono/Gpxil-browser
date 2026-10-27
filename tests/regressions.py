@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
+import zipfile
 
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 results: list[tuple[str, bool, str]] = []
@@ -240,6 +244,44 @@ def main() -> int:
         page.wait_for_timeout(1000)
         st = page.evaluate("[window.gpxil.panel.mode, window.gpxil.panel.tx.id, window.gpxil.lanes.active, window.gpxil.view.paused]")
         check("Expanded shows every transcript; a click opens one", bool(n) and n >= 30 and st == ["transcript", picked, False, False] and not errors, f"{n} lanes; {st}")
+        ctx.close()
+
+        # pxil downloads carry Ensembl IDs and read back as the sequences shown
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True)
+        ctx.add_init_script("localStorage.setItem('gpxil.skipIntro', 'true')")
+        page = ctx.new_page()
+        page.goto(url + "#chr17:7661779-7687538&gene=ENSG00000141510&mode=transcript")
+        page.wait_for_selector("#app:not([hidden])", timeout=30000)
+        page.wait_for_timeout(3000)
+        got = {}
+        tmp = tempfile.mkdtemp()
+        for act in ("pxil-transcript", "pxil-protein", "pxil-gene"):
+            with page.expect_download(timeout=30000) as d:
+                page.click(f"#gene-panel button[data-act={act}]")
+            f = os.path.join(tmp, d.value.suggested_filename)
+            d.value.save_as(f)
+            im = Image.open(f)
+            meta = json.loads(im.info["pxil"])
+            got[d.value.suggested_filename] = "".join(meta["alphabet"][i] for i in im.tobytes()[: meta["length"]])
+        names = sorted(got)
+        prot = got.get("TP53-201_ENSP00000269305.protein.pxil", "")
+        check(
+            "pxil downloads: Ensembl IDs in the names, sequences inside",
+            names == ["TP53-201_ENSP00000269305.protein.pxil", "TP53-201_ENST00000269305.transcript.pxil", "TP53_ENSG00000141510.gene.pxil"] and prot.startswith("MEEPQSDPSV") and len(prot) == 394,
+            f"{names}; protein {len(prot)} aa",
+        )
+        page.click("details.pxil-many summary")
+        page.check("[data-pick-all=transcript]")
+        with page.expect_download(timeout=60000) as d:
+            page.click("[data-act=pxil-zip]")
+        z = os.path.join(tmp, d.value.suggested_filename)
+        d.value.save_as(z)
+        n = len(zipfile.ZipFile(z).namelist())
+        check("zip of every transcript", d.value.suggested_filename == "TP53_ENSG00000141510.pxil.zip" and n >= 30 and zipfile.ZipFile(z).testzip() is None, f"{d.value.suggested_filename}: {n} files")
+        page.click("#downloads-btn")
+        page.wait_for_timeout(300)
+        files = page.evaluate("[...document.querySelectorAll('#dl-files a')].map(a => a.getAttribute('href'))")
+        check("downloads list every gpxil file", len(files) == 26 and all(f.endswith(".gpxil.tif") for f in files), f"{len(files)} files")
         ctx.close()
 
         # selenocysteine: GPX1's Sec49 is U, not a stop

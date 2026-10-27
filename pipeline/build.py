@@ -59,6 +59,8 @@ def main(argv=None) -> int:
     else:
         log("encoding the reference ...")
         seq = build_sequence(paths["fasta"], a.out, only=only, source_name=os.path.basename(DEFAULTS["fasta"]))
+    for c in seq["contigs"]:  # the size of each contig's gpxil file, for the downloads list
+        c["bytes"] = os.path.getsize(os.path.join(a.out, c["file"]))
     log("gene annotation ...")
     genes = build_genes(paths["gtf"], paths["hgnc"], a.out, [c["name"] for c in seq["contigs"]])
     for c in seq["contigs"]:

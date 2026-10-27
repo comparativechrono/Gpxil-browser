@@ -709,7 +709,8 @@ footer.status .credit {
   opacity: 1;
 }
 
-dialog#help {
+dialog#help,
+dialog#downloads {
   background: var(--panel);
   color: var(--text);
   border: 3px solid var(--pink);
@@ -720,18 +721,22 @@ dialog#help {
   overflow: auto;
   padding: 16px 22px;
 }
-dialog#help::backdrop {
+dialog#help::backdrop,
+dialog#downloads::backdrop {
   background: rgba(0, 0, 0, 0.6);
 }
-dialog#help h2 {
+dialog#help h2,
+dialog#downloads h2 {
   font: 14px/1.6 var(--pixel);
   color: var(--yellow);
 }
-dialog#help h3 {
+dialog#help h3,
+dialog#downloads h3 {
   font: 11px var(--pixel);
   color: var(--pink);
 }
-dialog#help form {
+dialog#help form,
+dialog#downloads form {
   float: right;
 }
 .keys td:first-child {
@@ -760,6 +765,9 @@ dialog#help form {
 }
 code {
   color: var(--green);
+  font-family: var(--mono);
+  font-size: 1em;
+  overflow-wrap: anywhere;
 }
 
 /* ------------------------------------------------------------ party mode */
@@ -829,4 +837,86 @@ body.party #view {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ------------------------------------------------------------ pxil downloads */
+details.pxil-many {
+  margin: 6px 0 10px;
+  border: 2px solid var(--line);
+  padding: 4px 8px 8px;
+}
+details.pxil-many summary {
+  cursor: pointer;
+  color: var(--cyan);
+  font-size: 17px;
+}
+.pxil-table {
+  max-height: 260px;
+  overflow: auto;
+  margin: 6px 0;
+}
+.pxil-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+.pxil-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  text-align: left;
+  font-weight: normal;
+  color: var(--dim);
+}
+.pxil-table th,
+.pxil-table td {
+  padding: 1px 4px;
+}
+.pxil-table th:not(:first-child),
+.pxil-table td:not(:first-child) {
+  text-align: center;
+  width: 6.5em;
+}
+.pxil-table td small {
+  display: block;
+  color: var(--dim);
+  font-size: 14px;
+}
+.pxil-table tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pick-gene {
+  display: block;
+  margin: 6px 0;
+  font-size: 16px;
+}
+
+/* ------------------------------------------------------------ downloads, copyright */
+.dl-files {
+  columns: 3 9em;
+  column-gap: 18px;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+}
+.dl-files li {
+  break-inside: avoid;
+}
+.dl-files small {
+  color: var(--dim);
+}
+.copyright {
+  color: var(--dim);
+  font-size: 15px;
+}
+.landing-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  margin: 0;
+  text-align: center;
+  color: #6a6a96;
+  font-size: 15px;
+  pointer-events: none;
 }

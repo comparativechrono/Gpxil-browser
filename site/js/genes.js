@@ -33,6 +33,7 @@ function normaliseGene(row, contig) {
       exons,
       cds: cds ? [cds[0], cds[1]] : null,
       frame: cds ? cds[2] : 0,
+      protein: cds && cds[3] ? cds[3] : null, // Ensembl protein ID (ENSP)
       incomplete: incomplete || "",
       sec: sec || [], // selenocysteine codons (genomic position of their first base)
     };
@@ -60,6 +61,7 @@ function normaliseTranscript(row, gene) {
     exons,
     cds: cds ? [g0 + cds[0], g0 + cds[1]] : null,
     frame: cds ? cds[2] : 0,
+    protein: cds && cds[3] ? cds[3] : null,
     incomplete: incomplete || "",
     sec: (sec || []).map((p) => g0 + p),
   };
@@ -267,7 +269,7 @@ export class GeneDB extends Emitter {
           cds: tr ? [tr.start - 1, tr.end] : null, // Ensembl translations include the stop codon
           frame: 0,
           length: t.length,
-          protein: tr ? tr.length : 0,
+          protein: tr ? tr.id : null,
         };
       });
       txs.sort((a, b) => b.canonical - a.canonical || (b.cds ? 1 : 0) - (a.cds ? 1 : 0) || a.name.localeCompare(b.name));

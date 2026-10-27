@@ -1,11 +1,16 @@
-// The gene panel: what the highlighted gene is, its transcripts, and the
-// same gene as pixels three more ways: every transcript as a pixel track
-// (expanded), the spliced mRNA, and the protein (one pixel per amino acid).
+// The gene panel: what the highlighted gene is, its transcripts, the spliced
+// mRNA and the protein as pixels (one pixel per base or amino acid), and
+// downloads of the gene, transcripts and proteins as pxil files (pictures of
+// sequences: https://github.com/comparativechrono/pxil).
 
-import { AMINO, buildLut, inkOn } from "./palettes.js";
+import { AMINO, buildLut } from "./palettes.js";
 import { bandAt } from "./karyotype.js";
-import { cdsRange, gcFraction, markSelenocysteine, spliced, translate, wrapFasta } from "./seq.js";
+import { cdsRange, markSelenocysteine, spliced, translate } from "./seq.js";
+import { DNA, PROTEIN, indicesOf, pxilFile, safeName, zip } from "./pxil.js";
 import { Emitter, escapeHtml, fmt, fmtBp } from "./util.js";
+
+const COMP4 = new Uint8Array(32); // complement of a gpxil code, keeping the soft-mask bit
+for (let c = 0; c < 32; c++) COMP4[c] = (c & 16) | ((c & 1) << 3) | ((c & 2) << 1) | ((c & 4) >> 1) | ((c & 8) >> 3);
 
 const MODES = [
   ["gene", "Gene", "The whole gene lit up in the genome."],
@@ -27,10 +32,15 @@ export class GenePanel extends Emitter {
     this.codes = null;
     this.palette = "classic";
     this.token = 0; // answers that arrive after another gene was opened are dropped
+    this.picks = { gene: false, transcript: new Set(), protein: new Set() }; // for the zip of pxil files
+    this.manyOpen = false;
+    this.source = "GRCh38"; // set by the app from the data's manifest
     root.addEventListener("click", (e) => this.click(e));
     root.addEventListener("change", (e) => {
       if (e.target.matches("select[data-role=tx]")) this.pickTx(e.target.value);
+      else if (e.target.matches("[data-pick], [data-pick-all]")) this.pick(e.target);
     });
+    root.addEventListener("toggle", (e) => e.target.matches("details.pxil-many") && (this.manyOpen = e.target.open), true);
   }
 
   clear() {
@@ -48,6 +58,7 @@ export class GenePanel extends Emitter {
       this.txs = null;
       this.codes = null;
       this.summary = undefined;
+      this.picks = { gene: false, transcript: new Set(), protein: new Set() };
     }
     this.tx = gene.tx;
     if (transcript && (!this.tx || this.tx.id !== transcript)) {
@@ -179,21 +190,208 @@ export class GenePanel extends Emitter {
         ${tx && tx.cds ? `<h3>Protein <small>one pixel per amino acid</small></h3><canvas class="protein"></canvas>` : ""}
         <p class="pixel-info" aria-live="polite"></p>
       </div>
+      ${this.downloadsHtml(txs)}
       <p class="summary">${this.summary ? `${escapeHtml(this.summary)} <small>— NCBI Gene, via MyGene.info</small>` : ""}</p>
-      <div class="actions">
-        <button data-act="zoom">Zoom to gene</button>
-        <button data-act="fasta-genomic">Genomic FASTA</button>
-        ${tx ? `<button data-act="fasta-mrna">mRNA FASTA</button>` : ""}
-        ${tx && tx.cds ? `<button data-act="fasta-protein">Protein FASTA</button>` : ""}
-      </div>
+      <div class="actions"><button data-act="zoom">Zoom to gene</button></div>
       <p class="links">${links.map(([l, u]) => `<a href="${u}" target="_blank" rel="noopener">${l}</a>`).join(" · ")}</p>`;
     this.renderPixels();
+  }
+
+  /** The pxil downloads: this transcript, its protein and the gene, or several at once (zipped). */
+  downloadsHtml(txs) {
+    const g = this.gene;
+    const tx = this.tx;
+    const p = this.picks;
+    const names = this.fileNames(tx);
+    const rows = txs
+      .map(
+        (t) => `<tr><td>${escapeHtml(t.name)}${t.mane ? " ★" : ""}<small>${escapeHtml(t.biotype.replace(/_/g, " "))}</small></td>
+          <td><input type="checkbox" data-pick="transcript" value="${t.id}" aria-label="${escapeHtml(t.name)} transcript" ${p.transcript.has(t.id) ? "checked" : ""}></td>
+          <td>${t.cds ? `<input type="checkbox" data-pick="protein" value="${t.id}" aria-label="${escapeHtml(t.name)} protein" ${p.protein.has(t.id) ? "checked" : ""}>` : "–"}</td></tr>`
+      )
+      .join("");
+    return `
+      <h3>Download as pixels <small><a href="https://github.com/comparativechrono/pxil" target="_blank" rel="noopener">pxil files</a></small></h3>
+      <div class="actions pxil">
+        ${tx ? `<button data-act="pxil-transcript" title="${escapeHtml(names.transcript)}">transcript.pxil</button>` : ""}
+        ${tx && tx.cds ? `<button data-act="pxil-protein" title="${escapeHtml(names.protein)}">protein.pxil</button>` : ""}
+        <button data-act="pxil-gene" title="${escapeHtml(names.gene)}">gene.pxil</button>
+      </div>
+      <details class="pxil-many" ${this.manyOpen ? "open" : ""}>
+        <summary>Several transcripts and proteins at once</summary>
+        <div class="pxil-table"><table>
+          <thead><tr><th>${fmt(txs.length)} transcript${txs.length === 1 ? "" : "s"}</th>
+            <th><label><input type="checkbox" data-pick-all="transcript"> transcript</label></th>
+            <th><label><input type="checkbox" data-pick-all="protein"> protein</label></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <label class="pick-gene"><input type="checkbox" data-pick="gene" ${p.gene ? "checked" : ""}> and ${escapeHtml(g.name)}'s genomic sequence (gene.pxil)</label>
+        <button data-act="pxil-zip" class="wide">${this.zipLabel()}</button>
+      </details>
+      <p class="hint">The pictures above, one pixel per base or amino acid, as PNG images whose pixel values are the sequence: they open in image software and read back exactly. File names carry the Ensembl IDs.</p>`;
+  }
+
+  zipLabel() {
+    const n = (this.picks.gene ? 1 : 0) + this.picks.transcript.size + this.picks.protein.size;
+    return n ? `Download ${n} file${n === 1 ? "" : "s"} (.zip)` : "Tick the files you want";
+  }
+
+  pick(input) {
+    const p = this.picks;
+    const txs = this.txs || (this.gene.tx ? [this.gene.tx] : []);
+    if (input.dataset.pickAll) {
+      const kind = input.dataset.pickAll;
+      for (const t of txs) if (kind === "transcript" || t.cds) input.checked ? p[kind].add(t.id) : p[kind].delete(t.id);
+      this.root.querySelectorAll(`[data-pick="${kind}"]`).forEach((cb) => (cb.checked = input.checked));
+    } else if (input.dataset.pick === "gene") p.gene = input.checked;
+    else input.checked ? p[input.dataset.pick].add(input.value) : p[input.dataset.pick].delete(input.value);
+    const b = this.root.querySelector("[data-act=pxil-zip]");
+    if (b) b.textContent = this.zipLabel();
+  }
+
+  /** File names, with the Ensembl IDs: gene ENSG, transcript ENST, protein ENSP. */
+  fileNames(t) {
+    const g = this.gene;
+    return {
+      gene: `${safeName(g.name)}_${g.id}.gene.pxil`,
+      transcript: t ? `${safeName(t.name)}_${t.id}.transcript.pxil` : "",
+      protein: t ? `${safeName(t.name)}_${t.protein || `${t.id}_protein`}.protein.pxil` : "",
+    };
+  }
+
+  panelWidth() {
+    const w = this.root.getBoundingClientRect().width;
+    return w ? Math.max(160, Math.floor(w - 8)) : 340;
+  }
+
+  common(palette = this.palette) {
+    const g = this.gene;
+    return { source: this.source, assembly: "GRCh38", contig: g.contig, created: new Date().toISOString().replace(/\.\d+Z$/, "Z"), generator: "Gpxil browser", palette };
+  }
+
+  dnaColours() {
+    const lut = buildLut(this.palette);
+    return Array.from({ length: 32 }, (_, c) => [lut.rgb[3 * c], lut.rgb[3 * c + 1], lut.rgb[3 * c + 2]]);
+  }
+
+  /** The gene's genomic sequence, 5′ to 3′ of the gene, soft-masked repeats kept. */
+  async genePxil() {
+    await this.loadCodes();
+    const g = this.gene;
+    const n = this.codes.codes.length;
+    const idx = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const c = this.codes.codes[g.strand > 0 ? i : n - 1 - i] & 31;
+      idx[i] = g.strand > 0 ? c : COMP4[c];
+    }
+    const seq = Array.from(idx, (i) => DNA[i]).join("");
+    const meta = {
+      kind: "gene",
+      id: g.id,
+      name: g.name,
+      description: g.description || undefined,
+      biotype: g.biotype,
+      ...this.common(),
+      start: g.start,
+      end: g.end,
+      strand: g.strand,
+      orientation: g.strand > 0 ? "5' to 3' of the gene: the reference's forward strand" : "5' to 3' of the gene: the reverse complement of the reference",
+    };
+    const bytes = await pxilFile({ indices: idx, alphabet: DNA, width: pickWrap(n, this.panelWidth(), 4).cols, colours: this.dnaColours(), meta, sequence: seq });
+    return { name: this.fileNames(null).gene, bytes };
+  }
+
+  /** A transcript's spliced sequence and, for coding ones, its protein. */
+  async spliceOf(t) {
+    await this.loadCodes();
+    const { seq, map } = spliced(this.codes.codes, this.codes.start, t);
+    const range = cdsRange(t, map);
+    let protein = null;
+    if (range) {
+      const start = range[0] + (t.frame || 0);
+      protein = markSelenocysteine(translate(seq.slice(start, range[1]), this.gene.contig === "chrM"), map, start, t.sec);
+    }
+    return { seq, range, protein };
+  }
+
+  async transcriptPxil(t) {
+    const g = this.gene;
+    const { seq, range } = await this.spliceOf(t);
+    const meta = {
+      kind: "transcript",
+      id: t.id,
+      name: t.name,
+      biotype: t.biotype,
+      gene: g.id,
+      gene_name: g.name,
+      protein: t.protein || undefined,
+      tags: [t.mane && "MANE Select", t.maneClinical && "MANE Plus Clinical", t.canonical && "Ensembl canonical"].filter(Boolean),
+      ...this.common(),
+      start: t.start,
+      end: t.end,
+      strand: t.strand,
+      orientation: "5' to 3', exons spliced",
+      exons: t.exons,
+      cds: range ? [range[0], range[1]] : undefined,
+    };
+    const bytes = await pxilFile({ indices: indicesOf(seq, DNA), alphabet: DNA, width: pickWrap(seq.length, this.panelWidth(), 4).cols, colours: this.dnaColours(), meta, sequence: seq });
+    return { name: this.fileNames(t).transcript, bytes };
+  }
+
+  async proteinPxil(t) {
+    const g = this.gene;
+    const { protein } = await this.spliceOf(t);
+    if (!protein) return null;
+    const meta = {
+      kind: "protein",
+      id: t.protein || undefined,
+      name: t.name,
+      transcript: t.id,
+      gene: g.id,
+      gene_name: g.name,
+      genetic_code: g.contig === "chrM" ? "vertebrate mitochondrial" : "standard",
+      description: "translated in the Gpxil browser from the transcript's coding sequence in GRCh38; * is the stop codon",
+      ...this.common("Taylor (1997) amino acid colours"),
+    };
+    const colours = [...PROTEIN].map((ch, i) => (i === 0 ? [7, 7, 15] : AMINO[ch] || AMINO.X));
+    const bytes = await pxilFile({ indices: indicesOf(protein, PROTEIN), alphabet: PROTEIN, width: pickWrap(protein.length, this.panelWidth(), 6).cols, colours, meta, sequence: protein });
+    return { name: this.fileNames(t).protein, bytes };
+  }
+
+  async downloadPxil(act) {
+    const g = this.gene;
+    try {
+      if (act === "pxil-gene") return this.emit("file", ...(await this.fileOf(this.genePxil())));
+      if (act === "pxil-transcript" && this.tx) return this.emit("file", ...(await this.fileOf(this.transcriptPxil(this.tx))));
+      if (act === "pxil-protein" && this.tx) return this.emit("file", ...(await this.fileOf(this.proteinPxil(this.tx))));
+      if (act === "pxil-zip") {
+        const p = this.picks;
+        const txs = this.txs || (g.tx ? [g.tx] : []);
+        const files = [];
+        if (p.gene) files.push(await this.genePxil());
+        for (const t of txs) {
+          if (p.transcript.has(t.id)) files.push(await this.transcriptPxil(t));
+          if (p.protein.has(t.id)) files.push(await this.proteinPxil(t));
+        }
+        const ok = files.filter(Boolean);
+        if (!ok.length) return this.emit("warn", "Tick the transcripts and proteins you want first");
+        if (ok.length === 1) return this.emit("file", ok[0].name, new Blob([ok[0].bytes], { type: "image/png" }));
+        this.emit("file", `${safeName(g.name)}_${g.id}.pxil.zip`, new Blob([zip(ok)], { type: "application/zip" }));
+      }
+    } catch (e) {
+      this.emit("warn", `Couldn't make the file: ${e.message}`);
+    }
+  }
+
+  async fileOf(promise) {
+    const f = await promise;
+    return [f.name, new Blob([f.bytes], { type: "image/png" })];
   }
 
   renderPixels() {
     if (!this.gene || !this.codes || this.codes.id !== this.gene.id) return;
     const lut = buildLut(this.palette);
-    const width = Math.max(160, Math.floor(this.root.getBoundingClientRect().width - 8));
+    const width = this.panelWidth();
     const info = this.root.querySelector(".pixel-info");
     const tx = this.tx;
     const mrna = this.root.querySelector("canvas.mrna");
@@ -237,16 +435,7 @@ export class GenePanel extends Emitter {
     const act = b.dataset.act;
     if (act === "close") return this.emit("close");
     if (act === "zoom") return this.emit("zoom", g);
-    if (act.startsWith("fasta")) {
-      await this.loadCodes();
-      let text = "";
-      if (act === "fasta-genomic") {
-        const { lettersOf } = await import("./seq.js");
-        text = wrapFasta(`${g.name} ${g.contig}:${g.start + 1}-${g.end} GRCh38 (forward strand, soft-masked) GC=${(100 * gcFraction(this.codes.codes)).toFixed(1)}%`, lettersOf(this.codes.codes, true));
-      } else if (act === "fasta-mrna" && this.mrna) text = wrapFasta(`${this.tx.id} ${this.tx.name} mRNA`, this.mrna.seq);
-      else if (act === "fasta-protein" && this.protein) text = wrapFasta(`${this.tx.id} ${this.tx.name} protein (translated here)`, this.protein.replace(/\*$/, ""));
-      this.emit("download", `${g.name}-${act.replace("fasta-", "")}.fa`, text);
-    }
+    if (act.startsWith("pxil")) return this.downloadPxil(act);
   }
 }
 
@@ -293,7 +482,6 @@ function drawAmino(cv, aa, { px, cols }) {
     img.data.set([c[0], c[1], c[2], 255], 4 * i);
   }
   ctx.putImageData(img, 0, 0);
-  void inkOn;
 }
 
 function cellAt(cv, e, { px, cols }) {

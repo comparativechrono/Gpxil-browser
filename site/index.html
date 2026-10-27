@@ -6,6 +6,7 @@
     <title>Gpxil Browser</title>
     <meta name="description" content="Explore the human genome (GRCh38) as pixels: one pixel per base. Search genes, walk along chromosomes and enter the pixelverse." />
     <meta name="theme-color" content="#07070f" />
+    <meta name="author" content="Chronomic Medicine Group, Department of Genomic Medicine, University of Cambridge" />
     <meta property="og:title" content="Gpxil Browser: enter the pixelverse" />
     <meta property="og:description" content="The human reference genome, one pixel per base." />
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
@@ -26,6 +27,7 @@
         <button id="enter" class="press-start">▶ ENTER</button>
         <label class="skip"><input type="checkbox" id="skip-intro" /> skip the intro next time</label>
       </div>
+      <p class="landing-copy">© 2026 Chronomic Medicine Group · Department of Genomic Medicine · University of Cambridge</p>
     </div>
 
     <div id="app" hidden>
@@ -49,6 +51,9 @@
             <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M3 1h3v1h2v6H1V2h2zm1 2v1H3v2h1v1h1V6h1V4H5V3z" /></svg>
           </button>
           <button id="panel-toggle" class="icon" title="Show or hide the side panel" aria-label="Panel" aria-controls="panel">☰</button>
+          <button id="downloads-btn" class="icon" title="Download gpxil files, and the formats" aria-label="Downloads">
+            <svg viewBox="0 0 9 9" width="18" height="18" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 0h1v5h1V4h1v1H6v1H5v1H4V6H3V5H2V4h1v1h1zM0 7h1v1h7V7h1v2H0z" /></svg>
+          </button>
           <button id="help-btn" class="icon" title="Help and shortcuts (?)" aria-label="Help">?</button>
         </div>
       </header>
@@ -123,7 +128,7 @@
         <span id="st-pos"></span>
         <span id="st-win"></span>
         <span id="st-zoom"></span>
-        <span class="credit">GRCh38 · <a href="#" id="about-link">data &amp; about</a></span>
+        <span class="credit">GRCh38 · <a href="#" id="downloads-link">downloads</a> · <a href="#" id="about-link">about</a> · © Chronomic Medicine Group</span>
       </footer>
 
       <div id="loader" hidden role="status"><canvas aria-hidden="true"></canvas><span class="loader-line"><span class="loader-text">LOADING DNA</span><span class="loader-dots" aria-hidden="true"></span></span><span class="loader-what"></span></div>
@@ -154,6 +159,25 @@
       <p>This is a browser for <a href="https://github.com/comparativechrono/Gpxil" target="_blank" rel="noopener">gpxil</a>, a file format that stores genomes as images, after Guenter Albrecht-Buehler's genome pixel images (<a href="https://doi.org/10.1371/journal.pone.0004701" target="_blank" rel="noopener">PLoS ONE, 2009</a>). The bases come straight from the GRCh38 gpxil files: the browser reads just the strips of pixels it needs with HTTP range requests.</p>
       <p>Only when you ask for them, a few things come live from other databases: variants, regulatory elements, rsID lookups and names the gene index doesn't know from the <a href="https://rest.ensembl.org" target="_blank" rel="noopener">Ensembl REST API</a>, and gene summaries from NCBI Gene via <a href="https://mygene.info" target="_blank" rel="noopener">MyGene.info</a>.</p>
       <p id="data-sources"></p>
+      <p class="copyright">© 2026 Chronomic Medicine Group, Department of Genomic Medicine, University of Cambridge. The Gpxil browser is free software under the <a href="https://github.com/comparativechrono/Gpxil-browser/blob/main/LICENSE" target="_blank" rel="noopener">MIT licence</a>; its code is at <a href="https://github.com/comparativechrono/Gpxil-browser" target="_blank" rel="noopener">github.com/comparativechrono/Gpxil-browser</a>.</p>
+    </dialog>
+
+    <dialog id="downloads" aria-labelledby="downloads-title">
+      <form method="dialog"><button class="icon close" aria-label="Close">✕</button></form>
+      <h2 id="downloads-title">Take the pixels home</h2>
+      <h3>The genome as gpxil</h3>
+      <p>The whole GRCh38 reference in one <a href="https://github.com/comparativechrono/Gpxil" target="_blank" rel="noopener">gpxil</a> file, <a id="dl-whole" href="https://github.com/comparativechrono/Gpxil-browser/releases/download/grch38-ensembl116/GRCh38.gpxil.tif">GRCh38.gpxil.tif</a> (about 850 MB; <a id="dl-whole-sum" href="https://github.com/comparativechrono/Gpxil-browser/releases/download/grch38-ensembl116/GRCh38.gpxil.tif.sha256">SHA-256</a>), or a chromosome at a time: these are the files this browser reads.</p>
+      <ul class="dl-files" id="dl-files"></ul>
+      <p class="hint">Read them with <a href="https://github.com/comparativechrono/Gpxil-tools" target="_blank" rel="noopener">gpxiltools</a> (<code>pip install git+https://github.com/comparativechrono/Gpxil-tools</code>, then <code>gpxil info chr17.gpxil.tif</code>), or open them in any TIFF viewer.</p>
+      <h3>Genes, transcripts and proteins as pxil</h3>
+      <p>Open a gene and use <b>Download as pixels</b> in its panel: <code>gene.pxil</code>, <code>transcript.pxil</code> and <code>protein.pxil</code> files, one at a time or zipped, each named with its Ensembl ID. <a href="https://github.com/comparativechrono/pxil" target="_blank" rel="noopener">pxil</a> is a simple PNG-based format for single sequences: good for quick analysis and sharing, while gpxil is for keeping genomes.</p>
+      <h3>The formats</h3>
+      <ul>
+        <li><a href="https://github.com/comparativechrono/Gpxil/blob/main/gpxil-spec.pdf" target="_blank" rel="noopener">The gpxil specification</a> (PDF) · <a href="https://github.com/comparativechrono/Gpxil" target="_blank" rel="noopener">its repository</a></li>
+        <li><a href="https://github.com/comparativechrono/pxil/blob/main/pxil-spec.pdf" target="_blank" rel="noopener">The pxil specification</a> (PDF) · <a href="https://github.com/comparativechrono/pxil" target="_blank" rel="noopener">its repository</a>, with a Python reader</li>
+        <li><a href="https://github.com/comparativechrono/Gpxil-tools" target="_blank" rel="noopener">gpxiltools</a>: encode, check, render and export gpxil files in Python</li>
+      </ul>
+      <p class="copyright">© 2026 Chronomic Medicine Group, Department of Genomic Medicine, University of Cambridge · <a href="https://github.com/comparativechrono/Gpxil-browser/blob/main/LICENSE" target="_blank" rel="noopener">MIT licence</a></p>
     </dialog>
   </body>
 </html>

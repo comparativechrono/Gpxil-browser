@@ -49,6 +49,8 @@ class App {
     this.ideo = new Ideogram({ canvas: $("#ideogram"), cytobands, karyotype });
     this.search = new Search({ input: $("#search"), list: $("#suggest"), genome: this.genome, genes: this.genes, cytobands });
     this.panel = new GenePanel({ root: $("#gene-panel"), genome: this.genome, genes: this.genes, cytobands });
+    const release = /release (\d+)/.exec(manifest.sources.sequence || "");
+    this.panel.source = release ? `GRCh38, Ensembl release ${release[1]}` : "GRCh38";
     this.live = new LiveTracks();
     this.view.live = this.live;
     this.lanes = new TranscriptLanes({ canvas: $("#lanes"), genome: this.genome, lut: () => this.view.lut, gutterWidth: () => $("#gutter").getBoundingClientRect().width || 118 });
@@ -494,6 +496,11 @@ class App {
     $("#random").addEventListener("click", () => this.randomGene());
     $("#snap").addEventListener("click", () => this.snapshot());
     $("#help-btn").addEventListener("click", () => $("#help").showModal());
+    $("#downloads-btn").addEventListener("click", () => this.showDownloads());
+    $("#downloads-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      this.showDownloads();
+    });
     $("#about-link").addEventListener("click", (e) => {
       e.preventDefault();
       $("#help").showModal();
@@ -590,6 +597,10 @@ class App {
     this.panel.on("close", () => this.clearGene());
     this.panel.on("zoom", (g) => (this.lanes.active ? this.lanes.reset() : this.showContig(g.contig, g.start, g.end)));
     this.panel.on("download", (name, text) => this.download(name, text));
+    this.panel.on("file", (name, blob) => {
+      this.downloadBlob(name, blob);
+      this.toast(`⇩ ${name}`, 2500);
+    });
     this.panel.on("warn", (m) => this.toast(m));
   }
 
@@ -700,13 +711,37 @@ class App {
 
   async snapshot() {
     if (this.screen !== "contig") return this.toast("Open a chromosome to take a picture");
+    // with a gene highlighted, the picture's name carries its Ensembl ID
+    const g = this.highlight && this.highlight.gene.contig === this.view.state.contig ? this.highlight.gene : null;
+    const who = g ? `${g.name}_${g.id}_` : "";
     if (this.lanes.active) {
       const d = this.lanes.describe();
-      return this.downloadBlob(`gpxil_${this.lanes.gene.name}_transcripts_${d.contig}_${d.start + 1}-${d.end}.png`, await this.lanes.snapshot());
+      return this.downloadBlob(`gpxil_${who}transcripts_${d.contig}_${d.start + 1}-${d.end}.png`, await this.lanes.snapshot());
     }
     const blob = await this.view.snapshot();
     const d = this.view.describe();
-    this.downloadBlob(`gpxil_${d.contig}_${d.start + 1}-${d.end}.png`, blob);
+    this.downloadBlob(`gpxil_${who}${d.contig}_${d.start + 1}-${d.end}.png`, blob);
+  }
+
+  /** The downloads dialog: the genome as gpxil files, and links to the formats. */
+  showDownloads() {
+    const list = $("#dl-files");
+    if (!list.childElementCount) {
+      const mb = (b) => (!b ? "" : b < 1e6 ? `${Math.ceil(b / 1e3)} kB` : `${(b / 1e6).toFixed(b < 1e7 ? 1 : 0)} MB`);
+      const files = new Map();
+      for (const c of this.manifest.sequence.contigs) {
+        const f = files.get(c.file) || { file: c.file, names: [], bytes: c.bytes };
+        f.names.push(c.name);
+        files.set(c.file, f);
+      }
+      list.innerHTML = [...files.values()]
+        .map((f) => {
+          const label = f.names.length > 1 ? `${f.names.length} unplaced scaffolds` : f.names[0];
+          return `<li><a href="${new URL(f.file, DATA).href}" download>${escapeHtml(label)}</a> <small>${mb(f.bytes)}</small></li>`;
+        })
+        .join("");
+    }
+    $("#downloads").showModal();
   }
 
   download(name, text) {

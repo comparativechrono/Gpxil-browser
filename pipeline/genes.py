@@ -8,6 +8,8 @@ Writes:
 - ``genes/<contig>.json.gz``: the genes of one contig, each with its canonical
   transcript (MANE Select where there is one, otherwise Ensembl canonical),
   its HGNC name and cross-references, and where its other transcripts are.
+  A coding transcript's CDS is [start, end, frame, Ensembl protein ID], the
+  end including the stop codon.
 - ``transcripts/<contig>.bin``: every transcript of every gene on the contig,
   one gzip member per gene, so the browser reads a gene's transcripts with a
   single HTTP range request (each gene row gives offset, length and count).
@@ -108,6 +110,7 @@ def iter_gtf(path: str):
                     "exons": [],
                     "cds": None,  # [lo, hi) of CDS + stop codon
                     "frame": None,
+                    "protein": None,  # Ensembl protein ID (ENSP)
                     "sec": [],
                     "incomplete": sorted(t for t in tags if t in INCOMPLETE),
                 }
@@ -124,6 +127,8 @@ def iter_gtf(path: str):
                 lo, hi = t["cds"] or (start0, end)
                 t["cds"] = (min(lo, start0), max(hi, end))
                 if kind == "CDS":
+                    if t["protein"] is None:
+                        t["protein"] = _attr(f[8], "protein_id")
                     # frame of the 5'-most CDS piece (in transcript orientation)
                     five_prime = start0 if t["strand"] == 1 else -end
                     if t["frame"] is None or five_prime < t["frame"][0]:
@@ -142,7 +147,7 @@ def canonical_row(t: dict) -> list:
     flat = []
     for s, e in sorted(t["exons"]):
         flat += [s - t["start"], e - t["start"]]
-    cds = [t["cds"][0], t["cds"][1], t["frame"][1] if t["frame"] else 0] if t["cds"] else None
+    cds = [t["cds"][0], t["cds"][1], t["frame"][1] if t["frame"] else 0, t["protein"] or ""] if t["cds"] else None
     row = [t["id"], t["name"], t["biotype"], int(bool(t["flags"] & MANE_SELECT)), t["start"], t["end"], flat, cds, ",".join(t["incomplete"])]
     if t["sec"]:
         row.append(sorted(t["sec"]))
@@ -154,7 +159,7 @@ def transcript_row(t: dict, g0: int) -> list:
     flat = []
     for s, e in sorted(t["exons"]):
         flat += [s - g0, e - g0]
-    cds = [t["cds"][0] - g0, t["cds"][1] - g0, t["frame"][1] if t["frame"] else 0] if t["cds"] else None
+    cds = [t["cds"][0] - g0, t["cds"][1] - g0, t["frame"][1] if t["frame"] else 0, t["protein"] or ""] if t["cds"] else None
     row = [t["id"], t["name"], t["biotype"], t["flags"], t["start"] - g0, t["end"] - g0, flat, cds, ",".join(t["incomplete"])]
     if t["sec"]:
         row.append(sorted(p - g0 for p in t["sec"]))
