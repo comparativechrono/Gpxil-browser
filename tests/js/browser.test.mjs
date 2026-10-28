@@ -7,6 +7,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -114,6 +115,15 @@ test("bases read over range requests match the FASTA", async () => {
   // intervals off either end are clamped
   assert.equal(lettersOf(await genome.bases("chr1", -5, 10), true), fasta.chr1.slice(0, 10));
   assert.equal((await genome.bases("chr1", 399_990, 400_100)).length, 10);
+});
+
+test("the reader is gpxiltools' own, as its record says", () => {
+  const dir = path.join(ROOT, "site", "js", "vendor");
+  const record = JSON.parse(fs.readFileSync(path.join(dir, "gpxil-read.source.json"), "utf8"));
+  const sha = crypto.createHash("sha256").update(fs.readFileSync(path.join(dir, "gpxil-read.js"))).digest("hex");
+  assert.equal(sha, record.sha256, "vendor/gpxil-read.js differs from the copy its record names: change it in Gpxil-tools, and copy it with js/copy_to.py");
+  assert.match(record.commit, /^[0-9a-f]{40}$/);
+  assert.equal(globalThis.GpxilRead.SPEC, "0.2");
 });
 
 test("strips are cached: reading the same bases again makes no requests", async () => {

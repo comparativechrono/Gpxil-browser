@@ -35,4 +35,12 @@ jobs:
         run: node --test tests/js/browser.test.mjs
 
       - name: Syntax of every module
-        run: for f in site/js/*.js; do node --check "$f" || exit 1; done
+        run: for f in site/js/*.js site/js/vendor/*.js; do node --check "$f" || exit 1; done
+
+      - name: The reader is gpxiltools' at the commit its record names
+        run: |
+          url=$(python3 -c "import json; print(json.load(open('site/js/vendor/gpxil-read.source.json'))['url'])")
+          want=$(python3 -c "import json; print(json.load(open('site/js/vendor/gpxil-read.source.json'))['sha256'])")
+          got=$(curl -fsSL --retry 3 "$url" | sha256sum | cut -d' ' -f1)
+          echo "$url: $got"
+          test "$got" = "$want"
