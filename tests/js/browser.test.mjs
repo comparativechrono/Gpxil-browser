@@ -123,7 +123,7 @@ test("the reader is gpxiltools' own, as its record says", () => {
   const sha = crypto.createHash("sha256").update(fs.readFileSync(path.join(dir, "gpxil-read.js"))).digest("hex");
   assert.equal(sha, record.sha256, "vendor/gpxil-read.js differs from the copy its record names: change it in Gpxil-tools, and copy it with js/copy_to.py");
   assert.match(record.commit, /^[0-9a-f]{40}$/);
-  assert.equal(globalThis.GpxilRead.SPEC, "0.2");
+  assert.equal(globalThis.GpxilRead.SPEC, "0.3");
 });
 
 test("strips are cached: reading the same bases again makes no requests", async () => {
