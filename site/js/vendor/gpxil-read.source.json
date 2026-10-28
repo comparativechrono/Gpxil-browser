@@ -1,0 +1,8 @@
+{
+ "about": "gpxil-read.js is a copy of gpxiltools' JavaScript reader, unchanged; update it with js/copy_to.py there",
+ "repository": "https://github.com/comparativechrono/Gpxil-tools",
+ "path": "js/gpxil-read.js",
+ "commit": "bc59b3844e7aaf1c36ee861890052907421e152a",
+ "sha256": "4723549e03a4a24690d66a331b4a45c7c665c39c4d3965d4e2a71740df723cab",
+ "url": "https://raw.githubusercontent.com/comparativechrono/Gpxil-tools/bc59b3844e7aaf1c36ee861890052907421e152a/js/gpxil-read.js"
+}

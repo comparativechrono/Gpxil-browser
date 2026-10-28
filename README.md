@@ -122,7 +122,10 @@ GeoTIFF, a gpxil file can be read in pieces: the manifest gives each contig's
 TIFF page, and the browser reads the page's strip table and then only the
 strips under the view, with HTTP range requests, and inflates them with the
 browser's own `DecompressionStream`. Zoomed out, it reads the summary bins
-instead.
+instead. The reader is gpxiltools' JavaScript reader,
+[`js/gpxil-read.js`](https://github.com/comparativechrono/Gpxil-tools/tree/main/js),
+which GpxilStudio uses too: `site/js/vendor/` keeps a copy, with a record of
+the commit it came from that the tests check. Change it there, not here.
 
 Some things are not stored on the site but fetched live, only when asked for:
 
@@ -207,7 +210,8 @@ keep their zoom, late Ensembl answers, pinches, keyboard use and so on).
 
 - [Gpxil](https://github.com/comparativechrono/Gpxil): the gpxil specification.
 - [Gpxil-tools](https://github.com/comparativechrono/Gpxil-tools): `gpxiltools`,
-  the Python reference implementation the pipeline uses.
+  the Python reference implementation the pipeline uses, and the JavaScript
+  reader the browser keeps a copy of.
 - [pxil](https://github.com/comparativechrono/pxil): the pxil format for single
   sequences, with a Python reader.
 
