@@ -51,7 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(python -c 'import gpxiltools; print(gpxiltools.__version__)')
-          notes="The GRCh38 reference genome (Ensembl release 116, soft-masked primary assembly) as one gpxil file: a reference page for each of its 194 chromosomes and scaffolds, 8,192 bases per row, written by gpxiltools ${version}. The Gpxil browser (https://comparativechrono.github.io/Gpxil-browser/) reads the same sequence as one file per chromosome.
+          notes="The GRCh38 reference genome (Ensembl release 116, soft-masked primary assembly) as one gpxil file: a reference page for each of its 194 chromosomes and scaffolds, 8,192 bases per row, written by gpxiltools ${version}. The Gpxil browser (https://pixelverse.cam/) reads the same sequence as one file per chromosome.
 
           Check the download with: sha256sum -c GRCh38.gpxil.tif.sha256
 
