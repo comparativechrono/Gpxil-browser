@@ -6,8 +6,8 @@ nothing but pixels: one pixel per base, read straight from
 genomes that follows Albrecht-Buehler's genome pixel images
 ([PLoS ONE, 2009](https://doi.org/10.1371/journal.pone.0004701)).
 
-It is a static site for GitHub Pages: **https://comparativechrono.github.io/Gpxil-browser/**
-(live once Pages is switched on, see [Deploying](#deploying)).
+It is a static site on GitHub Pages: **https://pixelverse.cam/** (see
+[Deploying](#deploying)).
 
 ![The landing screen: "Enter the pixelverse" assembling from flying bases above a turning pixel double helix](docs/img/landing.png)
 
